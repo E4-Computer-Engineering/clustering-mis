@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include "kmeans.h"
+#include "dbscan.h"
 
-int kmeans(int myrank, const char *str)
+int dbscan(int myrank, const char *str)
 {
 
    printf("I am rank %d and I am in the function %s\n", myrank, str);
