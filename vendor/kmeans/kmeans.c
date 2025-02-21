@@ -2,7 +2,6 @@
 #include <math.h>
 #include <time.h>
 #include "points.h"
-#include "kmeans.h"
 #include "kmeans_cl.h"
 
 static double pt_distance(const Pointer a, const Pointer b)

@@ -23,23 +23,23 @@ all: $(EXE)
 
 # Link executable
 $(EXE): $(OBJS)
-	$(CC) $(CFLAGS) $^ -o $@ $(LIB)
+	$(CXX) $(CFLAGS) $^ -o $@ $(LIB)
 
 #Compile source files into build directory
-$(OBJ_DIR)/points.o: $(SRC_DIR)/points.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(OBJ_DIR)/points.o: $(SRC_DIR)/points.cpp
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/kmeans_cl.o: $(KMEANS_LIB_DIR)/kmeans_cl.c $(KMEANS_LIB_DIR)/kmeans_cl.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/kmeans.o: $(KMEANS_LIB_DIR)/kmeans.c $(KMEANS_LIB_DIR)/kmeans.h
+$(OBJ_DIR)/kmeans.o: $(KMEANS_LIB_DIR)/kmeans.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/dbscan.o: $(DBSCAN_LIB_DIR)/dbscan.c $(DBSCAN_LIB_DIR)/dbscan.h
+$(OBJ_DIR)/dbscan.o: $(DBSCAN_LIB_DIR)/dbscan.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/clustering.o: $(SRC_DIR)/clustering.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(OBJ_DIR)/clustering.o: $(SRC_DIR)/clustering.cpp
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 # Clean up build files
 clean:
