@@ -4,10 +4,9 @@
 #include <mpi.h>
 
 #include "points.h"
-#include "kmeans.h"
 #include "dbscan.h"
 
-#define MAX_ROWS 5
+#define MAX_ROWS 789
 #define MAX_LINE_LENGTH 1024
 
 int main(int argc, char **argv)
@@ -21,7 +20,6 @@ int main(int argc, char **argv)
    int nptsincluster;
 
    point *pts;
-   int *clus = malloc(nptsincluster * sizeof(int));
 
    double z1, z2;
 
@@ -44,6 +42,7 @@ int main(int argc, char **argv)
    nptsincluster = MAX_ROWS -1;
 
    pts = calloc(nptsincluster, sizeof(point));
+   int *clus = malloc(nptsincluster * sizeof(int));
 
    if (nmethod % nproc != 0)
    {
@@ -60,7 +59,7 @@ int main(int argc, char **argv)
    if (myid == 0)
    {
         /* Read file */
-        FILE *file_in = fopen("cluster_points_test.csv", "r");
+        FILE *file_in = fopen("cluster_points_article.csv", "r");
         if (!file_in) {
            perror("Unable to open file!");
            return EXIT_FAILURE;
@@ -83,7 +82,7 @@ int main(int argc, char **argv)
             token = strtok(NULL, ",");
             if (token) clus[row] = atoi(token);
 
-            printf("Leggo %f, %f\n", z1, z2);
+//            printf("Leggo %f, %f\n", z1, z2);
 
 	    pts[row].x = z1;
             pts[row].y = z2;
@@ -125,6 +124,7 @@ int main(int argc, char **argv)
    }
    
    free(pts);
+   free(clus);
    MPI_Finalize();
    return 0;
 }
