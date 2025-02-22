@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "kmeans.h"
 #include "kmeans_cl.h"
 #include "points.h"
 
