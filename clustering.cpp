@@ -4,11 +4,12 @@
 #include <mpi.h>
 
 #include "points.h"
+#include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
 
-
-#include <cstddef>
-
-#define MAX_ROWS 789
 #define MAX_LINE_LENGTH 1024
 
 int main(int argc, char **argv)
@@ -20,16 +21,15 @@ int main(int argc, char **argv)
    int row = 0;
 
    int nptsincluster;
-
-   point *pts;
-
+   std::vector<point> pts;
+   std::vector<int> clus;
    double z1, z2;
 
-   int nmethod = 2;
    int nmethod_proc;
-   const char **method = (const char **)malloc(nmethod * sizeof(const char *));
-   const char *mymethod; 
-   int (*functions[])(int, const char*, point*, int) = {kmeans, dbscan};
+   std::vector<std::string> method = {"kmeans", "dbscan"};
+   int nmethod = method.size();
+
+   int (*functions[])(int, const char *, point *, int) = {kmeans, dbscan};
 
    int res;
 
@@ -41,92 +41,70 @@ int main(int argc, char **argv)
 
    create_mpi_point_type(&MPI_POINT);
 
-   nptsincluster = MAX_ROWS -1;
-
-   pts = static_cast<point *>(calloc(nptsincluster, sizeof(point)));
-   int *clus = static_cast<int *>(malloc(nptsincluster * sizeof(int)));
-
    if (nmethod % nproc != 0)
    {
       printf("Error");
       MPI_Abort(MPI_COMM_WORLD, 1);
-   } 
+   }
 
-   method[0] = "kmeans";
-   method[1] = "dbscan";
-   //method[2] = "M3";
-   //method[3] = "M4";
-   nmethod_proc = nmethod/nproc;
+   nmethod_proc = nmethod / nproc;
 
    if (myid == 0)
    {
-        /* Read file */
-        FILE *file_in = fopen("cluster_points_article.csv", "r");
-        if (!file_in) {
-           perror("Unable to open file!");
-           return EXIT_FAILURE;
-        }
+      std::ifstream file("cluster_points_article.csv");
+      if (!file)
+      {
+         std::cerr << "Error opening file.\n";
+         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+      }
 
-        // Read header line and ignore it
-        fgets(line, sizeof(line), file_in);
+      std::string line;
+      std::getline(file, line); // Skip first line
 
-        // Read data line by line
+      while (std::getline(file, line))
+      {
+         std::istringstream ss(line);
+         point p;
+         char comma;
 
-        while (fgets(line, sizeof(line), file_in) && row < nptsincluster)
-	{
-
-            char *token = strtok(line, ",");
-            if (token) z1 = atof(token);
-
-            token = strtok(0, ",");
-            if (token) z2 = atof(token);
-
-            token = strtok(0, ",");
-            if (token) clus[row] = atoi(token);
-
-//            printf("Leggo %f, %f\n", z1, z2);
-
-	    pts[row].x = z1;
-            pts[row].y = z2;
-             
-            /* Pointer to raw data */
-            //config.objs[row] = &(pts[row]);
-
-            row++;
-        }
-
-        fclose(file_in);
-
-        /*End of read file*/
-   	   
+         if (ss >> p.x >> comma >> p.y)
+         { // Read x and y, assuming CSV format
+            pts.emplace_back(p);
+         }
+      }
+      nptsincluster = pts.size();
    }
 
-//   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0, MPI_COMM_WORLD);
-   
-   MPI_Bcast(pts, nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
+   MPI_Bcast(&nptsincluster, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   std::cout << nptsincluster << std::endl;
+   //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0, MPI_COMM_WORLD);
+   if (myid != 0)
+   {
+      pts.resize(nptsincluster);
+   }
+
+   MPI_Bcast(pts.data(), nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
    // Print received data in each process
-/*   for (int i = 0; i < nptsincluster; i++)
-   {  
-     printf("I am proc %d and in pos %d, I received %f %f\n", myid, i, pts[i].x, pts[i].y);
-   }
-   printf("\n");
-*/
+   /*   for (int i = 0; i < nptsincluster; i++)
+      {
+        printf("I am proc %d and in pos %d, I received %f %f\n", myid, i, pts[i].x, pts[i].y);
+      }
+      printf("\n");
+   */
 
    for (int im = 0; im < nmethod_proc; im++)
    {
-      mymethod = method[nmethod_proc * myid + im];
-      printf("I am proc %d and I will deal with method %s\n", myid, mymethod);
+      std::string mymethod = method[nmethod_proc * myid + im];
+      printf("I am proc %d and I will deal with method %s\n", myid, mymethod.c_str());
       for (int i = 0; i < 2; i++)
       {
-         if (strcmp(mymethod, method[i]) == 0)
+         if (mymethod == method[i])
          {
-            res = functions[i](myid, mymethod, pts, nptsincluster);
-	 }
+            res = functions[i](myid, mymethod.c_str(), pts.data(), nptsincluster);
+         }
       }
    }
-   
-   free(pts);
-   free(clus);
+
    MPI_Finalize();
    return 0;
 }

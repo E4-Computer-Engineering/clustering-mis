@@ -1,5 +1,5 @@
 #include "points.h"
-#include <stddef.h>  // For offsetof
+#include <cstddef>  // For offsetof
 
 void create_mpi_point_type(MPI_Datatype *mpi_point_type) {
     int block_lengths[2] = {1, 1}; // One double per field
