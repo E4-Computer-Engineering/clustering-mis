@@ -16,9 +16,10 @@ extern "C" {
 #endif
 
 int kmeans(int myrank, const char *str, point *pts, int np);
-int dbscan(int myrank, const char *str, point *pts, int np);
 #ifdef __cplusplus
 }
 #endif
+
+int dbscan(int myrank, const char *str, point *pts, int np);
 
 #endif // POINT_H

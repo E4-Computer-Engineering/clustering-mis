@@ -14,6 +14,7 @@ EXE = $(BIN_DIR)/clustering
 
 # Compilation flags
 CFLAGS = -O3 -I$(INC_DIR) -I$(MPI_INC) -L$(MPI_LIB) -I$(KMEANS_LIB_DIR) -I$(DBSCAN_LIB_DIR)
+CXXFLAGS = -O3 -I$(INC_DIR) -I$(MPI_INC) -L$(MPI_LIB) -I$(KMEANS_LIB_DIR) -I$(DBSCAN_LIB_DIR) -std=c++20
 
 # Create build directory if it doesn't exist
 $(shell mkdir -p $(OBJ_DIR) $(BIN_DIR))
@@ -23,11 +24,11 @@ all: $(EXE)
 
 # Link executable
 $(EXE): $(OBJS)
-	$(CXX) $(CFLAGS) $^ -o $@ $(LIB)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB)
 
 #Compile source files into build directory
 $(OBJ_DIR)/points.o: $(SRC_DIR)/points.cpp
-	$(CXX) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/kmeans_cl.o: $(KMEANS_LIB_DIR)/kmeans_cl.c $(KMEANS_LIB_DIR)/kmeans_cl.h
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -35,11 +36,11 @@ $(OBJ_DIR)/kmeans_cl.o: $(KMEANS_LIB_DIR)/kmeans_cl.c $(KMEANS_LIB_DIR)/kmeans_c
 $(OBJ_DIR)/kmeans.o: $(KMEANS_LIB_DIR)/kmeans.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/dbscan.o: $(DBSCAN_LIB_DIR)/dbscan.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(OBJ_DIR)/dbscan.o: $(DBSCAN_LIB_DIR)/dbscan.cpp $(DBSCAN_LIB_DIR)/dbscan.hpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/clustering.o: $(SRC_DIR)/clustering.cpp
-	$(CXX) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean up build files
 clean:
