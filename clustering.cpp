@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <mpi.h>
 
 #include "points.h"
@@ -49,12 +48,17 @@ int main(int argc, char **argv)
 
    nmethod_proc = nmethod / nproc;
 
+   // Read input file in rank 0
    if (myid == 0)
    {
-      std::ifstream file("cluster_points_article.csv");
+      if (argc <= 1) {
+         std::cerr << "No input file was specified." << std::endl;
+         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+      }
+      std::ifstream file(argv[1]);
       if (!file)
       {
-         std::cerr << "Error opening file.\n";
+         std::cerr << "Error opening file." << std::endl;;
          MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
       }
 
@@ -67,22 +71,24 @@ int main(int argc, char **argv)
          point p;
          char comma;
 
+         // Read x and y, assuming CSV format
          if (ss >> p.x >> comma >> p.y)
-         { // Read x and y, assuming CSV format
+         {
             pts.emplace_back(p);
          }
       }
       nptsincluster = pts.size();
    }
 
+   // Broadcast parsed input to other ranks
    MPI_Bcast(&nptsincluster, 1, MPI_INT, 0, MPI_COMM_WORLD);
-   std::cout << nptsincluster << std::endl;
-   //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0, MPI_COMM_WORLD);
+   
    if (myid != 0)
    {
       pts.resize(nptsincluster);
    }
 
+   //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0, MPI_COMM_WORLD);
    MPI_Bcast(pts.data(), nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
    // Print received data in each process
    /*   for (int i = 0; i < nptsincluster; i++)
