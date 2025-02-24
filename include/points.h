@@ -20,6 +20,6 @@ int kmeans(int myrank, const char *str, point *pts, int np, int *res);
 }
 #endif
 
-int dbscan(int myrank, const char *str, point *pts, int np, int *res);
+int dbscan(int myrank, const char *str, point *pts, int np, int *res_out);
 
 #endif // POINT_H
