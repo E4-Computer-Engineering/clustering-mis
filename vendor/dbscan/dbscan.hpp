@@ -35,4 +35,4 @@ auto dbscan(const std::span<const point3>& data, float eps, int min_pts) -> std:
 // }
 
 // Custom code
-int dbscan(int myrank, const char *str, point *pts, int np);
+//int dbscan(int myrank, const char *str, point *pts, int np, int *res);

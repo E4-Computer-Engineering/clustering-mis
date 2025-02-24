@@ -21,14 +21,14 @@ int main(int argc, char **argv)
 
    int nptsincluster;
    std::vector<point> pts;
-   std::vector<int> clus;
+
    double z1, z2;
 
    int nmethod_proc;
    std::vector<std::string> method = {"kmeans", "dbscan"};
    int nmethod = method.size();
 
-   int (*functions[])(int, const char *, point *, int) = {kmeans, dbscan};
+   int (*functions[])(int, const char *, point *, int, int *) = {kmeans, dbscan};
 
    int res;
 
@@ -78,6 +78,7 @@ int main(int argc, char **argv)
          }
       }
       nptsincluster = pts.size();
+      std::vector<std::vector<int>> global_res(nptsincluster, std::vector<int>(nmethod, 0));
    }
 
    // Broadcast parsed input to other ranks
@@ -98,15 +99,16 @@ int main(int argc, char **argv)
       printf("\n");
    */
 
+   std::vector<int> clus(nptsincluster,0);
    for (int im = 0; im < nmethod_proc; im++)
    {
       std::string mymethod = method[nmethod_proc * myid + im];
       printf("I am proc %d and I will deal with method %s\n", myid, mymethod.c_str());
-      for (int i = 0; i < 2; i++)
+      for (int i = 0; i < nmethod; i++)
       {
          if (mymethod == method[i])
          {
-            res = functions[i](myid, mymethod.c_str(), pts.data(), nptsincluster);
+            res = functions[i](myid, mymethod.c_str(), pts.data(), nptsincluster, clus.data());
          }
       }
    }

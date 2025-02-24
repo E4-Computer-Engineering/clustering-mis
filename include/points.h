@@ -15,11 +15,11 @@ void create_mpi_point_type(MPI_Datatype *mpi_point_type);
 extern "C" {
 #endif
 
-int kmeans(int myrank, const char *str, point *pts, int np);
+int kmeans(int myrank, const char *str, point *pts, int np, int *res);
 #ifdef __cplusplus
 }
 #endif
 
-int dbscan(int myrank, const char *str, point *pts, int np);
+int dbscan(int myrank, const char *str, point *pts, int np, int *res);
 
 #endif // POINT_H
