@@ -1,6 +1,7 @@
 #include "dbscan.hpp"
 
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <nanoflann/nanoflann.hpp>
@@ -133,7 +134,7 @@ auto dbscan(const std::span<const point3>& data, float eps, int min_pts) -> std:
 }
 
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
-int dbscan(int myrank, const char *str, point *pts, int np, int *res_out) {
+int dbscan(int myrank, const char *str, point *pts, int np, int *res) {
     std::cout << "Hi from rank " << myrank << std::endl;
 
     // The following lines convert the input data from a C style array of point to a std::vector<point2>
@@ -144,30 +145,35 @@ int dbscan(int myrank, const char *str, point *pts, int np, int *res_out) {
                [](const point& p) { return point2{static_cast<float>(p.x), static_cast<float>(p.y)}; });
     
     // TODO find reasonable eps and min_pts
-    auto res = dbscan(pts2_vec, 1.5, 10);
+    auto dbscan_res = dbscan(pts2_vec, 1.5, 10);
 
-    if (res.size() == 0) {
+    if (dbscan_res.size() == 0) {
         std::cerr << "No cluster could be found with the given parameters. Increase eps or decrease min_pts" << std::endl;
         return EXIT_FAILURE;
     }
 
     // Unassigned points are put in the 0-th cluster
-    auto flat_clusters = std::vector<size_t>(np);
-    for(size_t i = 0; i < res.size(); i++)
+    auto flat_clusters = std::vector<int>(np);
+    for(size_t i = 0; i < dbscan_res.size(); i++)
     {
-        for(auto p: res[i])
+        for(auto p: dbscan_res[i])
         {
             flat_clusters[p] = i + 1;
         }
     }
 
-    // TODO do not write to file, send result to calling code/rank 0
-    std::ofstream out_file("dbscan_output.txt");
-    out_file << "Feature 1\tFeature 2\tCluster" << std::endl;
-    for (size_t i = 0; i < np; i++) {
-        out_file << pts[i].x << "\t" << pts[i].y << "\t" << flat_clusters[i] << std::endl;
+    // TODO remove file logging
+    bool LOG_TO_FILE = false;
+    if (LOG_TO_FILE) {
+        std::ofstream out_file("dbscan_output.txt");
+        out_file << "Feature 1\tFeature 2\tCluster" << std::endl;
+        for (size_t i = 0; i < np; i++) {
+            out_file << pts[i].x << "\t" << pts[i].y << "\t" << flat_clusters[i] << std::endl;
+        }
+        out_file.close();
     }
-    out_file.close();
+
+    memcpy(res, flat_clusters.data(), np*sizeof(int));
 
     return 0;
 }
