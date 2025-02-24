@@ -77,8 +77,7 @@ int main(int argc, char **argv)
             pts.emplace_back(p);
          }
       }
-      nptsincluster = pts.size();
-      std::vector<std::vector<int>> global_res(nptsincluster, std::vector<int>(nmethod, 0));
+      nptsincluster = pts.size();      
    }
 
    // Broadcast parsed input to other ranks
@@ -112,6 +111,10 @@ int main(int argc, char **argv)
          }
       }
    }
+   
+
+   std::vector<int> all_res(nptsincluster * nproc, 0); 
+   MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
 
    MPI_Finalize();
    return 0;
