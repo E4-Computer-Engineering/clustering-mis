@@ -25,10 +25,10 @@ int main(int argc, char **argv)
    double z1, z2;
 
    int nmethod_proc;
-   std::vector<std::string> method = {"kmeans", "dbscan"};
+   std::vector<std::string> method = {"kmeans", "dbscan", "hclust"};
    int nmethod = method.size();
 
-   int (*functions[])(int, const char *, point *, int, int *) = {kmeans, dbscan};
+   int (*functions[])(int, const char *, point *, int, int *) = {kmeans, dbscan, hclust};
 
    int res;
 
