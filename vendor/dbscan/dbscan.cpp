@@ -1,5 +1,6 @@
 #include "dbscan.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
@@ -153,12 +154,12 @@ int dbscan(int myrank, const char *str, point *pts, int np, int *res) {
     }
 
     // Unassigned points are put in the 0-th cluster
-    auto flat_clusters = std::vector<int>(np);
+    std::fill(res, res+np, 0);
     for(size_t i = 0; i < dbscan_res.size(); i++)
     {
         for(auto p: dbscan_res[i])
         {
-            flat_clusters[p] = i + 1;
+            res[p] = i + 1;
         }
     }
 
@@ -168,12 +169,10 @@ int dbscan(int myrank, const char *str, point *pts, int np, int *res) {
         std::ofstream out_file("dbscan_output.txt");
         out_file << "Feature 1\tFeature 2\tCluster" << std::endl;
         for (size_t i = 0; i < np; i++) {
-            out_file << pts[i].x << "\t" << pts[i].y << "\t" << flat_clusters[i] << std::endl;
+            out_file << pts[i].x << "\t" << pts[i].y << "\t" << res[i] << std::endl;
         }
         out_file.close();
     }
-
-    memcpy(res, flat_clusters.data(), np*sizeof(int));
 
     return 0;
 }
