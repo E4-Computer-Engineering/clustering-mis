@@ -1,9 +1,11 @@
 #include "dbscan.hpp"
 
 #include <cstddef>
+#include <fstream>
 #include <iostream>
 #include <nanoflann/nanoflann.hpp>
 
+#include <ostream>
 #include <type_traits>
 #include <vector>
 
@@ -133,5 +135,39 @@ auto dbscan(const std::span<const point3>& data, float eps, int min_pts) -> std:
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
 int dbscan(int myrank, const char *str, point *pts, int np) {
     std::cout << "Hi from rank " << myrank << std::endl;
+
+    // The following lines convert the input data from a C style array of point to a std::vector<point2>
+    std::vector<point> pts_vec(pts, pts + np);
+    std::vector<point2> pts2_vec(np);
+
+    std::transform(pts_vec.begin(), pts_vec.end(), pts2_vec.begin(), 
+               [](const point& p) { return point2{static_cast<float>(p.x), static_cast<float>(p.y)}; });
+    
+    // TODO find reasonable eps and min_pts
+    auto res = dbscan(pts2_vec, 1.5, 10);
+
+    if (res.size() == 0) {
+        std::cerr << "No cluster could be found with the given parameters. Increase eps or decrease min_pts" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    // Unassigned points are put in the 0-th cluster
+    auto flat_clusters = std::vector<size_t>(np);
+    for(size_t i = 0; i < res.size(); i++)
+    {
+        for(auto p: res[i])
+        {
+            flat_clusters[p] = i + 1;
+        }
+    }
+
+    // TODO do not write to file, send result to calling code/rank 0
+    std::ofstream out_file("dbscan_output.txt");
+    out_file << "Feature 1\tFeature 2\tCluster" << std::endl;
+    for (size_t i = 0; i < np; i++) {
+        out_file << pts[i].x << "\t" << pts[i].y << "\t" << flat_clusters[i] << std::endl;
+    }
+    out_file.close();
+
     return 0;
 }
