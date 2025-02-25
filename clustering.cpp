@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 #define MAX_LINE_LENGTH 1024
 
@@ -28,6 +29,8 @@ int main(int argc, char **argv)
    std::vector<std::string> method = {"kmeans", "dbscan", "hclust"};
    int nmethod = method.size();
 
+   int ncl_tot;
+
    int (*functions[])(int, const char *, point *, int, int *) = {kmeans, dbscan, hclust};
 
    int res;
@@ -37,7 +40,7 @@ int main(int argc, char **argv)
    MPI_Init(&argc, &argv);
    MPI_Comm_size(MPI_COMM_WORLD, &nproc);
    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
+   
    create_mpi_point_type(&MPI_POINT);
 
    if (nmethod % nproc != 0)
@@ -112,9 +115,25 @@ int main(int argc, char **argv)
       }
    }
    
+   int max = *std::max_element(clus.begin(), clus.end());
+   int min = *std::min_element(clus.begin(), clus.end());
+   int ncl = (max-min) + 1;
 
-   std::vector<int> all_res(nptsincluster * nproc, 0); 
+   std::vector<int> all_res; 
+   if (myid == 0)
+   {
+      all_res.resize(nptsincluster * nproc);
+   }
+
    MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Reduce(&ncl, &ncl_tot, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD); 
+
+   if (myid == 0)
+   {
+       printf("Total number of clusters is %d\n", ncl_tot);
+       printf("Matrice di sovrapposizione");
+   }
+  
 
    MPI_Finalize();
    return 0;
