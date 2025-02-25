@@ -15,6 +15,54 @@
 
 #define MAX_LINE_LENGTH 1024
 
+// Short-circuited sets intersection
+bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
+    auto i = x.begin();
+    auto j = y.begin();
+    while (i != x.end() && j != y.end()) {
+        if (*i == *j)
+            return true;
+        else if (*i < *j)
+            i++;
+        else
+            j++;
+    }
+    return false;
+}
+
+std::vector<std::vector<int>>
+create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
+    auto n = clusters.size();
+    auto penalty = n;
+
+    // Initialize empty matrix
+    std::vector<std::vector<int>> res(n, std::vector<int>(n, 0));
+
+    // Add penalty to overlapping clusters
+    for (auto i = 0; i < n - 1; i++) {
+        for (auto j = i + 1; j < n; j++) {
+            if (have_shared_elem(clusters[i], clusters[j])) {
+                res[i][j] = penalty;
+            }
+        }
+    }
+
+    // Set diagonal terms
+    for (auto i = 0; i < n; i++) {
+        res[i][i] = -1;
+    }
+    return res;
+}
+
+void print_matrix(const std::vector<std::vector<int>> &m) {
+    for (auto i : m) {
+        for (auto j : i) {
+            std::cout << j << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
 int main(int argc, char **argv) {
     int myid, nproc;
     MPI_Status status;
@@ -172,7 +220,9 @@ int main(int argc, char **argv) {
                 cluster_elems[assigned_cluster].insert(index);
             }
         }
-        printf("Matrice di sovrapposizione");
+        auto overlap_matrix = create_overlap_matrix(cluster_elems);
+        std::cout << "Overlap matrix:" << std::endl;
+        print_matrix(overlap_matrix);
     }
 
     MPI_Finalize();
