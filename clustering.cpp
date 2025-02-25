@@ -1,3 +1,4 @@
+#include <numeric>
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -119,14 +120,38 @@ int main(int argc, char **argv)
    int min = *std::min_element(clus.begin(), clus.end());
    int ncl = (max-min) + 1;
 
-   std::vector<int> all_res; 
+   std::vector<int> all_res; // Aggregation of all clustering results
+   std::vector<int> cluster_counts; // The number of clusters from each clustering algorithm
+   std::vector<int> offsets; // The offset that should be applied to each cluster, depending on its algorithm
    if (myid == 0)
    {
       all_res.resize(nptsincluster * nproc);
+      cluster_counts.resize(nproc);
+      offsets.resize(nproc);
+   }
+
+   MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+   // Each rank should adjust the indices assigned to its clusters,
+   // preventing clusters from different algorithms to have identical IDs.
+   if (myid == 0) {
+      std::partial_sum(cluster_counts.begin(), cluster_counts.end(), offsets.begin());
+      ncl_tot = offsets.back();
+      offsets.pop_back();
+      offsets.insert(offsets.begin(), 0);
+   }
+
+   int indices_offset;
+   MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   // If clustering indices started from e.g. 1, we should force them to start from zero instead.
+   // We can add this adjustment term on top of the global offset.
+   int actual_offset = indices_offset - min;
+
+   for (auto it = clus.begin(); it != clus.end(); it++) {
+      *it = *it + actual_offset;
    }
 
    MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
-   MPI_Reduce(&ncl, &ncl_tot, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD); 
 
    if (myid == 0)
    {
