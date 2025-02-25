@@ -1,5 +1,7 @@
 #include <mpi.h>
 #include <numeric>
+#include <set>
+#include <span>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -157,6 +159,19 @@ int main(int argc, char **argv) {
 
     if (myid == 0) {
         printf("Total number of clusters is %d\n", ncl_tot);
+
+        std::vector<std::set<int>> cluster_elems(ncl_tot);
+
+        // Create sets from each clustering algorithm
+        for (size_t i = 0; i < nproc; i++) {
+            std::span method_data{all_res.begin() + i * nptsincluster,
+                                  all_res.begin() + (i + 1) * nptsincluster};
+
+            for (size_t index = 0; index < nptsincluster; index++) {
+                auto assigned_cluster = method_data[index];
+                cluster_elems[assigned_cluster].insert(index);
+            }
+        }
         printf("Matrice di sovrapposizione");
     }
 
