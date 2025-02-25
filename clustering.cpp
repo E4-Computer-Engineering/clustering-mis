@@ -1,165 +1,165 @@
+#include <mpi.h>
 #include <numeric>
 #include <stdio.h>
 #include <stdlib.h>
-#include <mpi.h>
 
 #include "points.h"
-#include <vector>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <algorithm>
+#include <vector>
 
 #define MAX_LINE_LENGTH 1024
 
-int main(int argc, char **argv)
-{
-   int myid, nproc;
-   MPI_Status status;
+int main(int argc, char **argv) {
+    int myid, nproc;
+    MPI_Status status;
 
-   char line[MAX_LINE_LENGTH];
-   int row = 0;
+    char line[MAX_LINE_LENGTH];
+    int row = 0;
 
-   int nptsincluster;
-   std::vector<point> pts;
+    int nptsincluster;
+    std::vector<point> pts;
 
-   double z1, z2;
+    double z1, z2;
 
-   int nmethod_proc;
-   std::vector<std::string> method = {"kmeans", "dbscan", "hclust"};
-   int nmethod = method.size();
+    int nmethod_proc;
+    std::vector<std::string> method = {"kmeans", "dbscan", "hclust"};
+    int nmethod = method.size();
 
-   int ncl_tot;
+    int ncl_tot;
 
-   int (*functions[])(int, const char *, point *, int, int *) = {kmeans, dbscan, hclust};
+    int (*functions[])(int, const char *, point *, int,
+                       int *) = {kmeans, dbscan, hclust};
 
-   int res;
+    int res;
 
-   MPI_Datatype MPI_POINT;
+    MPI_Datatype MPI_POINT;
 
-   MPI_Init(&argc, &argv);
-   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
-   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-   
-   create_mpi_point_type(&MPI_POINT);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
-   if (nmethod % nproc != 0)
-   {
-      printf("Error");
-      MPI_Abort(MPI_COMM_WORLD, 1);
-   }
+    create_mpi_point_type(&MPI_POINT);
 
-   nmethod_proc = nmethod / nproc;
+    if (nmethod % nproc != 0) {
+        printf("Error");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
 
-   // Read input file in rank 0
-   if (myid == 0)
-   {
-      if (argc <= 1) {
-         std::cerr << "No input file was specified." << std::endl;
-         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-      }
-      std::ifstream file(argv[1]);
-      if (!file)
-      {
-         std::cerr << "Error opening file." << std::endl;;
-         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-      }
+    nmethod_proc = nmethod / nproc;
 
-      std::string line;
-      std::getline(file, line); // Skip first line
+    // Read input file in rank 0
+    if (myid == 0) {
+        if (argc <= 1) {
+            std::cerr << "No input file was specified." << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        }
+        std::ifstream file(argv[1]);
+        if (!file) {
+            std::cerr << "Error opening file." << std::endl;
+            ;
+            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        }
 
-      while (std::getline(file, line))
-      {
-         std::istringstream ss(line);
-         point p;
-         char comma;
+        std::string line;
+        std::getline(file, line); // Skip first line
 
-         // Read x and y, assuming CSV format
-         if (ss >> p.x >> comma >> p.y)
-         {
-            pts.emplace_back(p);
-         }
-      }
-      nptsincluster = pts.size();      
-   }
+        while (std::getline(file, line)) {
+            std::istringstream ss(line);
+            point p;
+            char comma;
 
-   // Broadcast parsed input to other ranks
-   MPI_Bcast(&nptsincluster, 1, MPI_INT, 0, MPI_COMM_WORLD);
-   
-   if (myid != 0)
-   {
-      pts.resize(nptsincluster);
-   }
+            // Read x and y, assuming CSV format
+            if (ss >> p.x >> comma >> p.y) {
+                pts.emplace_back(p);
+            }
+        }
+        nptsincluster = pts.size();
+    }
 
-   //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0, MPI_COMM_WORLD);
-   MPI_Bcast(pts.data(), nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
-   // Print received data in each process
-   /*   for (int i = 0; i < nptsincluster; i++)
-      {
-        printf("I am proc %d and in pos %d, I received %f %f\n", myid, i, pts[i].x, pts[i].y);
-      }
-      printf("\n");
-   */
+    // Broadcast parsed input to other ranks
+    MPI_Bcast(&nptsincluster, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-   std::vector<int> clus(nptsincluster,0);
-   for (int im = 0; im < nmethod_proc; im++)
-   {
-      std::string mymethod = method[nmethod_proc * myid + im];
-      printf("I am proc %d and I will deal with method %s\n", myid, mymethod.c_str());
-      for (int i = 0; i < nmethod; i++)
-      {
-         if (mymethod == method[i])
-         {
-            res = functions[i](myid, mymethod.c_str(), pts.data(), nptsincluster, clus.data());
-         }
-      }
-   }
-   
-   int max = *std::max_element(clus.begin(), clus.end());
-   int min = *std::min_element(clus.begin(), clus.end());
-   int ncl = (max-min) + 1;
+    if (myid != 0) {
+        pts.resize(nptsincluster);
+    }
 
-   std::vector<int> all_res; // Aggregation of all clustering results
-   std::vector<int> cluster_counts; // The number of clusters from each clustering algorithm
-   std::vector<int> offsets; // The offset that should be applied to each cluster, depending on its algorithm
-   if (myid == 0)
-   {
-      all_res.resize(nptsincluster * nproc);
-      cluster_counts.resize(nproc);
-      offsets.resize(nproc);
-   }
+    //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0,
+    //   MPI_COMM_WORLD);
+    MPI_Bcast(pts.data(), nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
+    // Print received data in each process
+    /*   for (int i = 0; i < nptsincluster; i++)
+       {
+         printf("I am proc %d and in pos %d, I received %f %f\n", myid, i,
+       pts[i].x, pts[i].y);
+       }
+       printf("\n");
+    */
 
-   MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    std::vector<int> clus(nptsincluster, 0);
+    for (int im = 0; im < nmethod_proc; im++) {
+        std::string mymethod = method[nmethod_proc * myid + im];
+        printf("I am proc %d and I will deal with method %s\n", myid,
+               mymethod.c_str());
+        for (int i = 0; i < nmethod; i++) {
+            if (mymethod == method[i]) {
+                res = functions[i](myid, mymethod.c_str(), pts.data(),
+                                   nptsincluster, clus.data());
+            }
+        }
+    }
 
-   // Each rank should adjust the indices assigned to its clusters,
-   // preventing clusters from different algorithms to have identical IDs.
-   if (myid == 0) {
-      std::partial_sum(cluster_counts.begin(), cluster_counts.end(), offsets.begin());
-      ncl_tot = offsets.back();
-      offsets.pop_back();
-      offsets.insert(offsets.begin(), 0);
-   }
+    int max = *std::max_element(clus.begin(), clus.end());
+    int min = *std::min_element(clus.begin(), clus.end());
+    int ncl = (max - min) + 1;
 
-   int indices_offset;
-   MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0, MPI_COMM_WORLD);
-   // If clustering indices started from e.g. 1, we should force them to start from zero instead.
-   // We can add this adjustment term on top of the global offset.
-   int actual_offset = indices_offset - min;
+    std::vector<int> all_res; // Aggregation of all clustering results
+    std::vector<int>
+        cluster_counts; // The number of clusters from each clustering algorithm
+    std::vector<int> offsets; // The offset that should be applied to each
+                              // cluster, depending on its algorithm
+    if (myid == 0) {
+        all_res.resize(nptsincluster * nproc);
+        cluster_counts.resize(nproc);
+        offsets.resize(nproc);
+    }
 
-   for (auto it = clus.begin(); it != clus.end(); it++) {
-      *it = *it + actual_offset;
-   }
+    MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0,
+               MPI_COMM_WORLD);
 
-   MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
+    // Each rank should adjust the indices assigned to its clusters,
+    // preventing clusters from different algorithms to have identical IDs.
+    if (myid == 0) {
+        std::partial_sum(cluster_counts.begin(), cluster_counts.end(),
+                         offsets.begin());
+        ncl_tot = offsets.back();
+        offsets.pop_back();
+        offsets.insert(offsets.begin(), 0);
+    }
 
-   if (myid == 0)
-   {
-       printf("Total number of clusters is %d\n", ncl_tot);
-       printf("Matrice di sovrapposizione");
-   }
-  
+    int indices_offset;
+    MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0,
+                MPI_COMM_WORLD);
+    // If clustering indices started from e.g. 1, we should force them to start
+    // from zero instead. We can add this adjustment term on top of the global
+    // offset.
+    int actual_offset = indices_offset - min;
 
-   MPI_Finalize();
-   return 0;
+    for (auto it = clus.begin(); it != clus.end(); it++) {
+        *it = *it + actual_offset;
+    }
+
+    MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),
+               nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (myid == 0) {
+        printf("Total number of clusters is %d\n", ncl_tot);
+        printf("Matrice di sovrapposizione");
+    }
+
+    MPI_Finalize();
+    return 0;
 }
