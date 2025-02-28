@@ -13,8 +13,6 @@
 #include <string>
 #include <vector>
 
-#define MAX_LINE_LENGTH 1024
-
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
     auto i = x.begin();
@@ -64,45 +62,38 @@ void print_matrix(const std::vector<std::vector<int>> &m) {
 }
 
 int main(int argc, char **argv) {
-    int myid, nproc;
+    int my_rank, num_processes;
     MPI_Status status;
 
-    char line[MAX_LINE_LENGTH];
-    int row = 0;
-
-    int nptsincluster;
+    int num_points;
     std::vector<point> pts;
 
-    double z1, z2;
-
-    int nmethod_proc;
-    std::vector<std::string> method = {"kmeans", "dbscan", "hclust"};
-    int nmethod = method.size();
-
-    int ncl_tot;
+    std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
+    int num_methods = methods.size();
 
     int (*functions[])(int, const char *, point *, int,
                        int *) = {kmeans, dbscan, hclust};
 
-    int res;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     MPI_Datatype MPI_POINT;
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &nproc);
-    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
     create_mpi_point_type(&MPI_POINT);
 
-    if (nmethod % nproc != 0) {
-        printf("Error");
+    // FIXME this check suggests that a rank can compute multiple methods,
+    // but the data is currently overwritten instead of accumulated
+    if (num_methods % num_processes != 0) {
+        std::cout << "Aborting, the number of clustering methods should be a "
+                     "multiple of the number of processes."
+                  << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    nmethod_proc = nmethod / nproc;
+    auto nmethod_proc = num_methods / num_processes;
 
     // Read input file in rank 0
-    if (myid == 0) {
+    if (my_rank == 0) {
         if (argc <= 1) {
             std::cerr << "No input file was specified." << std::endl;
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
@@ -127,37 +118,27 @@ int main(int argc, char **argv) {
                 pts.emplace_back(p);
             }
         }
-        nptsincluster = pts.size();
+        num_points = pts.size();
     }
 
     // Broadcast parsed input to other ranks
-    MPI_Bcast(&nptsincluster, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&num_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    if (myid != 0) {
-        pts.resize(nptsincluster);
+    if (my_rank != 0) {
+        pts.resize(num_points);
     }
 
-    //   MPI_Bcast(pts, nptsincluster * sizeof(point), MPI_BYTE, 0,
-    //   MPI_COMM_WORLD);
-    MPI_Bcast(pts.data(), nptsincluster, MPI_POINT, 0, MPI_COMM_WORLD);
-    // Print received data in each process
-    /*   for (int i = 0; i < nptsincluster; i++)
-       {
-         printf("I am proc %d and in pos %d, I received %f %f\n", myid, i,
-       pts[i].x, pts[i].y);
-       }
-       printf("\n");
-    */
+    MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
 
-    std::vector<int> clus(nptsincluster, 0);
+    std::vector<int> clus(num_points, 0);
     for (int im = 0; im < nmethod_proc; im++) {
-        std::string mymethod = method[nmethod_proc * myid + im];
-        printf("I am proc %d and I will deal with method %s\n", myid,
+        std::string mymethod = methods[nmethod_proc * my_rank + im];
+        printf("I am proc %d and I will deal with method %s\n", my_rank,
                mymethod.c_str());
-        for (int i = 0; i < nmethod; i++) {
-            if (mymethod == method[i]) {
-                res = functions[i](myid, mymethod.c_str(), pts.data(),
-                                   nptsincluster, clus.data());
+        for (int i = 0; i < num_methods; i++) {
+            if (mymethod == methods[i]) {
+                auto res = functions[i](my_rank, mymethod.c_str(), pts.data(),
+                                        num_points, clus.data());
             }
         }
     }
@@ -171,18 +152,19 @@ int main(int argc, char **argv) {
         cluster_counts; // The number of clusters from each clustering algorithm
     std::vector<int> offsets; // The offset that should be applied to each
                               // cluster, depending on its algorithm
-    if (myid == 0) {
-        all_res.resize(nptsincluster * nproc);
-        cluster_counts.resize(nproc);
-        offsets.resize(nproc);
+    if (my_rank == 0) {
+        all_res.resize(num_points * num_processes);
+        cluster_counts.resize(num_processes);
+        offsets.resize(num_processes);
     }
 
     MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0,
                MPI_COMM_WORLD);
 
+    int ncl_tot;
     // Each rank should adjust the indices assigned to its clusters,
     // preventing clusters from different algorithms to have identical IDs.
-    if (myid == 0) {
+    if (my_rank == 0) {
         std::partial_sum(cluster_counts.begin(), cluster_counts.end(),
                          offsets.begin());
         ncl_tot = offsets.back();
@@ -202,20 +184,20 @@ int main(int argc, char **argv) {
         *it = *it + actual_offset;
     }
 
-    MPI_Gather(clus.data(), nptsincluster, MPI_INT, all_res.data(),
-               nptsincluster, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gather(clus.data(), num_points, MPI_INT, all_res.data(), num_points,
+               MPI_INT, 0, MPI_COMM_WORLD);
 
-    if (myid == 0) {
+    if (my_rank == 0) {
         printf("Total number of clusters is %d\n", ncl_tot);
 
         std::vector<std::set<int>> cluster_elems(ncl_tot);
 
         // Create sets from each clustering algorithm
-        for (size_t i = 0; i < nproc; i++) {
-            std::span method_data{all_res.begin() + i * nptsincluster,
-                                  all_res.begin() + (i + 1) * nptsincluster};
+        for (size_t i = 0; i < num_processes; i++) {
+            std::span method_data{all_res.begin() + i * num_points,
+                                  all_res.begin() + (i + 1) * num_points};
 
-            for (size_t index = 0; index < nptsincluster; index++) {
+            for (size_t index = 0; index < num_points; index++) {
                 auto assigned_cluster = method_data[index];
                 cluster_elems[assigned_cluster].insert(index);
             }
