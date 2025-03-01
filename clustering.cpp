@@ -1,8 +1,8 @@
 #include <mpi.h>
 #include <numeric>
+#include <ostream>
 #include <set>
 #include <span>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "points.h"
@@ -61,12 +61,24 @@ void print_matrix(const std::vector<std::vector<int>> &m) {
     }
 }
 
+void read_points(std::istream &file, std::vector<point> &points) {
+    std::string line;
+    std::getline(file, line); // Skip first line
+
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        point p;
+        char comma;
+
+        // Read x and y, assuming CSV format
+        if (ss >> p.x >> comma >> p.y) {
+            points.emplace_back(p);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     int my_rank, num_processes;
-    MPI_Status status;
-
-    int num_points;
-    std::vector<point> pts;
 
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
     int num_methods = methods.size();
@@ -90,8 +102,10 @@ int main(int argc, char **argv) {
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    auto nmethod_proc = num_methods / num_processes;
+    auto num_methods_proc = num_methods / num_processes;
 
+    std::vector<point> pts;
+    int num_points;
     // Read input file in rank 0
     if (my_rank == 0) {
         if (argc <= 1) {
@@ -105,19 +119,7 @@ int main(int argc, char **argv) {
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
 
-        std::string line;
-        std::getline(file, line); // Skip first line
-
-        while (std::getline(file, line)) {
-            std::istringstream ss(line);
-            point p;
-            char comma;
-
-            // Read x and y, assuming CSV format
-            if (ss >> p.x >> comma >> p.y) {
-                pts.emplace_back(p);
-            }
-        }
+        read_points(file, pts);
         num_points = pts.size();
     }
 
@@ -131,16 +133,14 @@ int main(int argc, char **argv) {
     MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
 
     std::vector<int> clus(num_points, 0);
-    for (int im = 0; im < nmethod_proc; im++) {
-        std::string mymethod = methods[nmethod_proc * my_rank + im];
-        printf("I am proc %d and I will deal with method %s\n", my_rank,
-               mymethod.c_str());
-        for (int i = 0; i < num_methods; i++) {
-            if (mymethod == methods[i]) {
-                auto res = functions[i](my_rank, mymethod.c_str(), pts.data(),
-                                        num_points, clus.data());
-            }
-        }
+    for (int offset = 0; offset < num_methods_proc; offset++) {
+        auto method_idx = num_methods_proc * my_rank + offset;
+
+        std::string current_method_name = methods.at(method_idx);
+        std::cout << "I am proc " << my_rank << " and I will deal with method "
+                  << current_method_name << std::endl;
+        auto res = functions[method_idx](my_rank, current_method_name.c_str(),
+                                         pts.data(), num_points, clus.data());
     }
 
     int max = *std::max_element(clus.begin(), clus.end());
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
                MPI_INT, 0, MPI_COMM_WORLD);
 
     if (my_rank == 0) {
-        printf("Total number of clusters is %d\n", ncl_tot);
+        std::cout << "Total number of clusters is " << ncl_tot << std::endl;
 
         std::vector<std::set<int>> cluster_elems(ncl_tot);
 
