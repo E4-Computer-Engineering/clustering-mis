@@ -45,7 +45,7 @@ static void pt_centroid(const Pointer * objs, const int * clusters, size_t num_o
         return;
 }
 
-int kmeans(int myrank, const char *str, point *pts, int n, int* res)
+int kmeans(int myrank, const char *str, const point *pts, int n, int* res)
 {
 
    printf("I am rank %d and I am in the function %s\n", myrank, str);

@@ -5,9 +5,9 @@
 #include <fstream>
 #include <vector>
 
-double distance(point &a, point &b) { return std::hypot(a.x - b.x, a.y - b.y); }
+double distance(const point &a, const point &b) { return std::hypot(a.x - b.x, a.y - b.y); }
 
-std::vector<double> create_distance_matrix(point *data, size_t n) {
+std::vector<double> create_distance_matrix(const point *data, size_t n) {
     std::vector<double> distmat((n * (n - 1)) / 2);
 
     int k, i, j;
@@ -23,7 +23,7 @@ std::vector<double> create_distance_matrix(point *data, size_t n) {
 }
 
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
-int hclust(int myrank, const char *str, point *pts, int np, int *res) {
+int hclust(int myrank, const char *str, const point *pts, int np, int *res) {
     size_t NUM_CLUSTERS = 8;
     auto distmat = create_distance_matrix(pts, np);
 

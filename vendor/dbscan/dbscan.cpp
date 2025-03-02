@@ -135,7 +135,7 @@ auto dbscan(const std::span<const point3>& data, float eps, int min_pts) -> std:
 }
 
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
-int dbscan(int myrank, const char *str, point *pts, int np, int *res) {
+int dbscan(int myrank, const char *str, const point *pts, int np, int *res) {
     std::cout << "Hi from rank " << myrank << std::endl;
 
     // The following lines convert the input data from a C style array of point to a std::vector<point2>

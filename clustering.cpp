@@ -1,3 +1,4 @@
+#include <cmath>
 #include <mpi.h>
 #include <numeric>
 #include <ostream>
@@ -77,13 +78,65 @@ void read_points(std::istream &file, std::vector<point> &points) {
     }
 }
 
+// Return total number of clusters identified by each algorithm
+int run_clustering_algorithms(int my_rank, int num_methods_proc,
+                              const std::vector<point> &pts, int num_methods,
+                              const std::vector<std::string> &methods,
+                              int (*functions[])(int, const char *,
+                                                 const point *, int, int *),
+                              std::vector<int> &assigned_clusters) {
+    auto num_points = pts.size();
+
+    // Each process can run more than one clustering algorithm.
+    // This offset is used to track previous results and
+    // to make every cluster number computed by this process unique.
+    // e.g. Cluster 0 from algorithm 1 should not have the same label of
+    // cluster 0 from algorithm 2.
+    int clustering_offset = 0;
+
+    for (int local_method_idx = 0; local_method_idx < num_methods_proc;
+         local_method_idx++) {
+        auto global_method_idx = num_methods_proc * my_rank + local_method_idx;
+
+        if (global_method_idx >= num_methods) {
+            break; // This method does not exist
+        }
+
+        std::string current_method_name = methods.at(global_method_idx);
+        std::cout << "I am proc " << my_rank << " and I will deal with method "
+                  << current_method_name << std::endl;
+
+        auto res = functions[global_method_idx](
+            my_rank, current_method_name.c_str(), pts.data(), num_points,
+            assigned_clusters.data() + local_method_idx * num_points);
+
+        auto begin = assigned_clusters.begin() + local_method_idx * num_points;
+        auto end = begin + num_points;
+
+        int max = *std::max_element(begin, end);
+        int min = *std::min_element(begin, end);
+        int current_num_cluster = (max - min) + 1;
+
+        // If clustering indices started from e.g. 1, we should force them to
+        // start from zero instead. We can add this adjustment term on top of
+        // the other offset.
+        int actual_offset = clustering_offset - min;
+        for (auto it = begin; it != end; it++) {
+            *it = *it + actual_offset;
+        }
+
+        clustering_offset += current_num_cluster;
+    }
+    return clustering_offset;
+}
+
 int main(int argc, char **argv) {
     int my_rank, num_processes;
 
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
     int num_methods = methods.size();
 
-    int (*functions[])(int, const char *, point *, int,
+    int (*functions[])(int, const char *, const point *, int,
                        int *) = {kmeans, dbscan, hclust};
 
     MPI_Init(&argc, &argv);
@@ -92,17 +145,6 @@ int main(int argc, char **argv) {
 
     MPI_Datatype MPI_POINT;
     create_mpi_point_type(&MPI_POINT);
-
-    // FIXME this check suggests that a rank can compute multiple methods,
-    // but the data is currently overwritten instead of accumulated
-    if (num_methods % num_processes != 0) {
-        std::cout << "Aborting, the number of clustering methods should be a "
-                     "multiple of the number of processes."
-                  << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
-    auto num_methods_proc = num_methods / num_processes;
 
     std::vector<point> pts;
     int num_points;
@@ -132,28 +174,23 @@ int main(int argc, char **argv) {
 
     MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
 
-    std::vector<int> clus(num_points, 0);
-    for (int offset = 0; offset < num_methods_proc; offset++) {
-        auto method_idx = num_methods_proc * my_rank + offset;
+    // The maximum number of methods to be run by each process
+    auto num_methods_proc =
+        std::ceil((float)num_methods / (float)num_processes);
 
-        std::string current_method_name = methods.at(method_idx);
-        std::cout << "I am proc " << my_rank << " and I will deal with method "
-                  << current_method_name << std::endl;
-        auto res = functions[method_idx](my_rank, current_method_name.c_str(),
-                                         pts.data(), num_points, clus.data());
-    }
+    // Run the algorithms assigned to this process and flatten their results
+    std::vector<int> assigned_clusters(num_methods_proc * num_points, 0);
+    int ncl =
+        run_clustering_algorithms(my_rank, num_methods_proc, pts, num_methods,
+                                  methods, functions, assigned_clusters);
 
-    int max = *std::max_element(clus.begin(), clus.end());
-    int min = *std::min_element(clus.begin(), clus.end());
-    int ncl = (max - min) + 1;
-
-    std::vector<int> all_res; // Aggregation of all clustering results
-    std::vector<int>
-        cluster_counts; // The number of clusters from each clustering algorithm
+    std::vector<int> all_res;        // Aggregation of all clustering results
+                                     // across all processes
+    std::vector<int> cluster_counts; // The number of clusters from each rank
     std::vector<int> offsets; // The offset that should be applied to each
-                              // cluster, depending on its algorithm
+                              // cluster, depending on its rank
     if (my_rank == 0) {
-        all_res.resize(num_points * num_processes);
+        all_res.resize(num_points * num_processes * num_methods_proc);
         cluster_counts.resize(num_processes);
         offsets.resize(num_processes);
     }
@@ -175,25 +212,29 @@ int main(int argc, char **argv) {
     int indices_offset;
     MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0,
                 MPI_COMM_WORLD);
-    // If clustering indices started from e.g. 1, we should force them to start
-    // from zero instead. We can add this adjustment term on top of the global
-    // offset.
-    int actual_offset = indices_offset - min;
 
-    for (auto it = clus.begin(); it != clus.end(); it++) {
-        *it = *it + actual_offset;
+    for (auto it = assigned_clusters.begin(); it != assigned_clusters.end();
+         it++) {
+        *it = *it + indices_offset;
     }
 
-    MPI_Gather(clus.data(), num_points, MPI_INT, all_res.data(), num_points,
-               MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gather(assigned_clusters.data(), num_points * num_methods_proc, MPI_INT,
+               all_res.data(), num_points * num_methods_proc, MPI_INT, 0,
+               MPI_COMM_WORLD);
 
     if (my_rank == 0) {
         std::cout << "Total number of clusters is " << ncl_tot << std::endl;
 
         std::vector<std::set<int>> cluster_elems(ncl_tot);
 
+        // Handle cases where the number of methods is not a multiple of the
+        // number of processes (this removes the trailing zeros that can be seen
+        // in all_res in such cases, that would otherwise clash with other zeros
+        // corresponding to the 0-th cluster)
+        all_res.resize(num_points * num_methods);
+
         // Create sets from each clustering algorithm
-        for (size_t i = 0; i < num_processes; i++) {
+        for (size_t i = 0; i < num_methods; i++) {
             std::span method_data{all_res.begin() + i * num_points,
                                   all_res.begin() + (i + 1) * num_points};
 
