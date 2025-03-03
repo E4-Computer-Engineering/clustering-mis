@@ -2,8 +2,20 @@
 
 This work is based upon the approach from [A clustering aggregation algorithm on neutral-atoms and annealing quantum processors](https://arxiv.org/pdf/2412.07558).
 
+## How to run
+Make sure to have a working MPI installation available. Its include path should either be added to $INCLUDE or $MPI_INC.
+
+The code can be compiled using `make`. The newly built executable will be under the build/bin directory.
+
+The code can be run as follows:
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv
+```
+You can optionally add another argument to save the output matrix to file:
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt
+```
 ## TODO
-- [ ] Add license
 - [ ] Add brief description with images
 
 ## Suggested dev setup
