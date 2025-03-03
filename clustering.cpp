@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 #include <mpi.h>
 #include <numeric>
 #include <ostream>
@@ -53,12 +54,32 @@ create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
     return res;
 }
 
-void print_matrix(const std::vector<std::vector<int>> &m) {
+void write_matrix(std::ostream &out_stream,
+                  const std::vector<std::vector<int>> &m) {
     for (auto i : m) {
-        for (auto j : i) {
-            std::cout << j << " ";
+        for (auto j = i.begin(); j != i.end(); j++) {
+            if (j != i.begin()) {
+                out_stream << " ";
+            }
+            out_stream << *j;
         }
-        std::cout << std::endl;
+        out_stream << std::endl;
+    }
+}
+
+void print_matrix(const std::vector<std::vector<int>> &m) {
+    write_matrix(std::cout, m);
+}
+
+int save_matrix(const std::string &file_name,
+                const std::vector<std::vector<int>> &m) {
+    std::ofstream file(file_name);
+    if (!file) {
+        std::cerr << "Error opening file." << std::endl;
+        return EXIT_FAILURE;
+    } else {
+        write_matrix(file, m);
+        return EXIT_SUCCESS;
     }
 }
 
@@ -244,8 +265,18 @@ int main(int argc, char **argv) {
             }
         }
         auto overlap_matrix = create_overlap_matrix(cluster_elems);
-        std::cout << "Overlap matrix:" << std::endl;
-        print_matrix(overlap_matrix);
+
+        if (argc > 2) {
+            auto status = save_matrix(argv[2], overlap_matrix);
+            if (status == EXIT_FAILURE) {
+                std::cerr << "Unable to write the overlap matrix to file."
+                          << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+            }
+        } else {
+            std::cout << "Overlap matrix:" << std::endl;
+            print_matrix(overlap_matrix);
+        }
     }
 
     MPI_Finalize();
