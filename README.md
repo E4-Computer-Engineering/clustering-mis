@@ -15,6 +15,10 @@ You can optionally add another argument to save the output matrix to file:
 ```bash
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt
 ```
+You can add one more optional argument to save the indices of points that comprise each cluster:
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
+```
 ### Expected output
 Running the clustering executable will create an overlap matrix in the following form:
 ```
@@ -27,9 +31,16 @@ Running the clustering executable will create an overlap matrix in the following
 0 0 0 0 0 0 -1 8
 0 0 0 0 0 0 0 -1
 ```
-Each column/row represent a possible cluster. The diagonal terms are equal to -1, the off-diagonal ones are either 0 or a positive integer $\lambda$. Positive values denote overlaps between clusters. The value of $\lambda$ is defined as the number of different clusters, in this case 8, in order to prevent the selection of overlapping clusters. 
+Each column/row represent a possible cluster. The diagonal terms are equal to -1, the off-diagonal ones are either 0 or a positive integer $\lambda$. Positive values denote overlaps between clusters. The value of $\lambda$ is defined as the number of different clusters, in this case 8, in order to prevent the selection of overlapping clusters.
+
+If you choose to also save the points of each cluster, they will be in this form:
+```
+0,1,3,4
+2,5,7
+6,8,9
+```
+Each line corresponds to a different cluster. Each of its comma-separated values corresponds to a point from the original input file.
 ## TODO
-- [ ] Write clusters to file for later retrieval?
 - [ ] Add brief description with images
 
 ## Suggested dev setup

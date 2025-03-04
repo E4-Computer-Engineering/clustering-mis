@@ -83,6 +83,26 @@ int save_matrix(const std::string &file_name,
     }
 }
 
+int save_clusters(const std::string &file_name,
+                  std::vector<std::set<int>> cluster_elems) {
+    std::ofstream file(file_name);
+    if (!file) {
+        std::cerr << "Error opening file." << std::endl;
+        return EXIT_FAILURE;
+    } else {
+        for (auto cluster : cluster_elems) {
+            for (auto j = cluster.begin(); j != cluster.end(); j++) {
+                if (j != cluster.begin()) {
+                    file << ",";
+                }
+                file << *j;
+            }
+            file << std::endl;
+        }
+        return EXIT_SUCCESS;
+    }
+}
+
 void read_points(std::istream &file, std::vector<point> &points) {
     std::string line;
     std::getline(file, line); // Skip first line
@@ -266,16 +286,25 @@ int main(int argc, char **argv) {
         }
         auto overlap_matrix = create_overlap_matrix(cluster_elems);
 
-        if (argc > 2) {
+        if (argc < 3) {
+            std::cout << "Overlap matrix:" << std::endl;
+            print_matrix(overlap_matrix);
+        } else {
             auto status = save_matrix(argv[2], overlap_matrix);
             if (status == EXIT_FAILURE) {
                 std::cerr << "Unable to write the overlap matrix to file."
                           << std::endl;
                 MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
             }
-        } else {
-            std::cout << "Overlap matrix:" << std::endl;
-            print_matrix(overlap_matrix);
+            if (argc > 3) {
+                auto clus_status = save_clusters(argv[3], cluster_elems);
+                if (clus_status == EXIT_FAILURE) {
+                    std::cerr
+                        << "Unable to write the obtained clusters to file."
+                        << std::endl;
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+            }
         }
     }
 
