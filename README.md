@@ -19,6 +19,10 @@ You can add one more optional argument to save the indices of points that compri
 ```bash
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
 ```
+To enable a looping approach, another argument can be added. This argument is the file where the quantum job will write its result. If not provided, it will be called "quantum_job_output.txt":
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt quantum_job_output.txt
+```
 ### Expected output
 Running the clustering executable will create an overlap matrix in the following form:
 ```
