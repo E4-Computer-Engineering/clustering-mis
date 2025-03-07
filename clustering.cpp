@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include <mpi.h>
 #include <numeric>
 #include <ostream>
@@ -14,6 +15,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+using ClusFuncType =
+    std::function<int(int, const char *, const point *, int, int *)>;
 
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
@@ -123,8 +127,7 @@ void read_points(std::istream &file, std::vector<point> &points) {
 int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
                               const std::vector<std::string> &methods,
-                              int (*functions[])(int, const char *,
-                                                 const point *, int, int *),
+                              std::vector<ClusFuncType> &functions,
                               std::vector<int> &assigned_clusters) {
     auto num_points = pts.size();
 
@@ -175,10 +178,8 @@ int main(int argc, char **argv) {
     int my_rank, num_processes;
 
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
+    std::vector<ClusFuncType> functions = {kmeans, dbscan, hclust};
     int num_methods = methods.size();
-
-    int (*functions[])(int, const char *, const point *, int,
-                       int *) = {kmeans, dbscan, hclust};
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
