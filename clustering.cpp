@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <mpi.h>
 #include <numeric>
@@ -14,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using ClusFuncType =
@@ -174,7 +176,16 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
     return clustering_offset;
 }
 
+// Wait until the given file exists
+void wait_for_file(const std::string &flag_file) {
+    while (!std::filesystem::exists(flag_file)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+
 int main(int argc, char **argv) {
+    std::string quantum_job_output_name = "quantum_job_output.txt";
+
     int my_rank, num_processes;
 
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
@@ -182,12 +193,11 @@ int main(int argc, char **argv) {
     int num_methods = methods.size();
 
     MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     MPI_Datatype MPI_POINT;
     create_mpi_point_type(&MPI_POINT);
 
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     std::vector<point> pts;
     int num_points;
     // Read input file in rank 0
@@ -207,105 +217,139 @@ int main(int argc, char **argv) {
         num_points = pts.size();
     }
 
-    // Broadcast parsed input to other ranks
-    MPI_Bcast(&num_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    int num_loops = 5; // TODO define a dynamic number of loops?
+    for (auto loop_it = 0; loop_it < num_loops; loop_it++) {
+        // Rank and size may have changed due to malleability
+        MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+        MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    if (my_rank != 0) {
-        pts.resize(num_points);
-    }
+        // Broadcast parsed input to other ranks
+        MPI_Bcast(&num_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
-
-    // The maximum number of methods to be run by each process
-    auto num_methods_proc =
-        std::ceil((float)num_methods / (float)num_processes);
-
-    // Run the algorithms assigned to this process and flatten their results
-    std::vector<int> assigned_clusters(num_methods_proc * num_points, 0);
-    int ncl =
-        run_clustering_algorithms(my_rank, num_methods_proc, pts, num_methods,
-                                  methods, functions, assigned_clusters);
-
-    std::vector<int> all_res;        // Aggregation of all clustering results
-                                     // across all processes
-    std::vector<int> cluster_counts; // The number of clusters from each rank
-    std::vector<int> offsets; // The offset that should be applied to each
-                              // cluster, depending on its rank
-    if (my_rank == 0) {
-        all_res.resize(num_points * num_processes * num_methods_proc);
-        cluster_counts.resize(num_processes);
-        offsets.resize(num_processes);
-    }
-
-    MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0,
-               MPI_COMM_WORLD);
-
-    int ncl_tot;
-    // Each rank should adjust the indices assigned to its clusters,
-    // preventing clusters from different algorithms to have identical IDs.
-    if (my_rank == 0) {
-        std::partial_sum(cluster_counts.begin(), cluster_counts.end(),
-                         offsets.begin());
-        ncl_tot = offsets.back();
-        offsets.pop_back();
-        offsets.insert(offsets.begin(), 0);
-    }
-
-    int indices_offset;
-    MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0,
-                MPI_COMM_WORLD);
-
-    for (auto it = assigned_clusters.begin(); it != assigned_clusters.end();
-         it++) {
-        *it = *it + indices_offset;
-    }
-
-    MPI_Gather(assigned_clusters.data(), num_points * num_methods_proc, MPI_INT,
-               all_res.data(), num_points * num_methods_proc, MPI_INT, 0,
-               MPI_COMM_WORLD);
-
-    if (my_rank == 0) {
-        std::cout << "Total number of clusters is " << ncl_tot << std::endl;
-
-        std::vector<std::set<int>> cluster_elems(ncl_tot);
-
-        // Handle cases where the number of methods is not a multiple of the
-        // number of processes (this removes the trailing zeros that can be seen
-        // in all_res in such cases, that would otherwise clash with other zeros
-        // corresponding to the 0-th cluster)
-        all_res.resize(num_points * num_methods);
-
-        // Create sets from each clustering algorithm
-        for (size_t i = 0; i < num_methods; i++) {
-            std::span method_data{all_res.begin() + i * num_points,
-                                  all_res.begin() + (i + 1) * num_points};
-
-            for (size_t index = 0; index < num_points; index++) {
-                auto assigned_cluster = method_data[index];
-                cluster_elems[assigned_cluster].insert(index);
-            }
+        if (my_rank != 0) {
+            pts.resize(num_points);
         }
-        auto overlap_matrix = create_overlap_matrix(cluster_elems);
 
-        if (argc < 3) {
-            std::cout << "Overlap matrix:" << std::endl;
-            print_matrix(overlap_matrix);
-        } else {
-            auto status = save_matrix(argv[2], overlap_matrix);
-            if (status == EXIT_FAILURE) {
-                std::cerr << "Unable to write the overlap matrix to file."
-                          << std::endl;
-                MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-            }
-            if (argc > 3) {
-                auto clus_status = save_clusters(argv[3], cluster_elems);
-                if (clus_status == EXIT_FAILURE) {
-                    std::cerr
-                        << "Unable to write the obtained clusters to file."
-                        << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
+
+        // The maximum number of methods to be run by each process
+        auto num_methods_proc =
+            std::ceil((float)num_methods / (float)num_processes);
+
+        // Run the algorithms assigned to this process and flatten their results
+        std::vector<int> assigned_clusters(num_methods_proc * num_points, 0);
+        int ncl = run_clustering_algorithms(my_rank, num_methods_proc, pts,
+                                            num_methods, methods, functions,
+                                            assigned_clusters);
+
+        std::vector<int> all_res; // Aggregation of all clustering results
+                                  // across all processes
+        std::vector<int>
+            cluster_counts;       // The number of clusters from each rank
+        std::vector<int> offsets; // The offset that should be applied to each
+                                  // cluster, depending on its rank
+        if (my_rank == 0) {
+            all_res.resize(num_points * num_processes * num_methods_proc);
+            cluster_counts.resize(num_processes);
+            offsets.resize(num_processes);
+        }
+
+        MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0,
+                   MPI_COMM_WORLD);
+
+        int ncl_tot;
+        // Each rank should adjust the indices assigned to its clusters,
+        // preventing clusters from different algorithms to have identical IDs.
+        if (my_rank == 0) {
+            std::partial_sum(cluster_counts.begin(), cluster_counts.end(),
+                             offsets.begin());
+            ncl_tot = offsets.back();
+            offsets.pop_back();
+            offsets.insert(offsets.begin(), 0);
+        }
+
+        int indices_offset;
+        MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT, 0,
+                    MPI_COMM_WORLD);
+
+        for (auto it = assigned_clusters.begin(); it != assigned_clusters.end();
+             it++) {
+            *it = *it + indices_offset;
+        }
+
+        MPI_Gather(assigned_clusters.data(), num_points * num_methods_proc,
+                   MPI_INT, all_res.data(), num_points * num_methods_proc,
+                   MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (my_rank == 0) {
+            std::cout << "Total number of clusters is " << ncl_tot << std::endl;
+
+            std::vector<std::set<int>> cluster_elems(ncl_tot);
+
+            // Handle cases where the number of methods is not a multiple of the
+            // number of processes (this removes the trailing zeros that can be
+            // seen in all_res in such cases, that would otherwise clash with
+            // other zeros corresponding to the 0-th cluster)
+            all_res.resize(num_points * num_methods);
+
+            // Create sets from each clustering algorithm
+            for (size_t i = 0; i < num_methods; i++) {
+                std::span method_data{all_res.begin() + i * num_points,
+                                      all_res.begin() + (i + 1) * num_points};
+
+                for (size_t index = 0; index < num_points; index++) {
+                    auto assigned_cluster = method_data[index];
+                    cluster_elems[assigned_cluster].insert(index);
                 }
             }
+            auto overlap_matrix = create_overlap_matrix(cluster_elems);
+
+            if (argc < 3) {
+                std::cout << "Overlap matrix:" << std::endl;
+                print_matrix(overlap_matrix);
+            } else {
+                auto status = save_matrix(argv[2], overlap_matrix);
+                if (status == EXIT_FAILURE) {
+                    std::cerr << "Unable to write the overlap matrix to file."
+                              << std::endl;
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                if (argc > 3) {
+                    auto clus_status = save_clusters(argv[3], cluster_elems);
+                    if (clus_status == EXIT_FAILURE) {
+                        std::cerr
+                            << "Unable to write the obtained clusters to file."
+                            << std::endl;
+                        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                    }
+                }
+            }
+        }
+
+        if (argc > 4) {
+            quantum_job_output_name = argv[4];
+        }
+
+        std::string flag_file_name = quantum_job_output_name + ".flag";
+        // Placeholder to launch the quantum job
+        if (my_rank == 0) {
+            // Actual calling:
+            // system(executable, argv[3], quantum_job_output_name,...)
+
+            // TODO remove this block
+            // Placeholder until the calling interface will be defined.
+            std::ofstream qjob_output(quantum_job_output_name);
+            qjob_output.close();
+            std::ofstream qjob_output_flag(flag_file_name);
+            qjob_output_flag.close();
+
+            // We expect to have the output available if the flag is detected
+            wait_for_file(flag_file_name);
+            // The flag can be removed after being detected
+            std::filesystem::remove(flag_file_name);
+
+            // TODO actually do something instead of just looping
+            std::cout << "Iteration number " << loop_it << " done" << std::endl;
         }
     }
 
