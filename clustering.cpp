@@ -127,6 +127,20 @@ void read_points(std::istream &file, std::vector<point> &points) {
 
 /* 
 * DMR HINT
+* Code to call to initialize any data on the original process / set of processes
+* Can take any number / type of arguments
+*/
+void initialize()
+{
+    /*
+    *   if(dmr_get_reconfig_count() == 0)
+    *   {
+    *   } 
+    */
+}
+
+/* 
+* DMR HINT
 * Code to call to save the current state of the code
 * Can take any number / type of arguments
 */
@@ -228,8 +242,8 @@ int main(int argc, char **argv) {
     /* 
     * DMR HINT
     * If this is code that should only run at the very first iteration before any reconfiguration,
-    * then note that it is possible to get this information by checking dmr_get_reconfig_count() == 0
-    * Otherwise, it will run each time we restart due to reconfiguration
+    * then we need to wrap it in special logic. See initialize skeleton.
+    * Otherwise, it will run each time we restart due to reconfiguration.
     */
 
     MPI_Datatype MPI_POINT;
@@ -257,8 +271,8 @@ int main(int argc, char **argv) {
 
     /* 
     * DMR HINT
-    * Again, dmr_get_reconfig_count may be helpful here if the loops
-    * are to align with the number of reconfigurations
+    * The function dmr_get_reconfig_count seen in the initialize skeleton may be helpful here if the loops
+    * are to align with the number of reconfigurations. Otherwise, it might need to be part of the checkpoint/restart
     */
 
     int num_loops = 5; // TODO define a dynamic number of loops?
