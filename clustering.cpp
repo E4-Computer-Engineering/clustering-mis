@@ -125,6 +125,37 @@ void read_points(std::istream &file, std::vector<point> &points) {
     }
 }
 
+/* 
+* DMR HINT
+* Code to call to save the current state of the code
+* Can take any number / type of arguments
+*/
+void checkpoint()
+{
+
+}
+
+/* 
+* DMR HINT
+* Code to call to retrieve the state of the code written in the checkpoint
+* Can take any number / type of arguments
+*/
+void restart()
+{
+
+}
+
+
+/* 
+* DMR HINT
+* Resource cleanup code when processes are exiting due to a reconfiguration
+* Can take any number / type of arguments
+*/
+void finalize()
+{
+
+}
+
 // Return total number of clusters identified by each algorithm
 int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
@@ -194,6 +225,13 @@ int main(int argc, char **argv) {
 
     MPI_Init(&argc, &argv);
 
+    /* 
+    * DMR HINT
+    * If this is code that should only run at the very first iteration before any reconfiguration,
+    * then note that it is possible to get this information by checking dmr_get_reconfig_count() == 0
+    * Otherwise, it will run each time we restart due to reconfiguration
+    */
+
     MPI_Datatype MPI_POINT;
     create_mpi_point_type(&MPI_POINT);
 
@@ -217,9 +255,28 @@ int main(int argc, char **argv) {
         num_points = pts.size();
     }
 
+    /* 
+    * DMR HINT
+    * Again, dmr_get_reconfig_count may be helpful here if the loops
+    * are to align with the number of reconfigurations
+    */
+
     int num_loops = 5; // TODO define a dynamic number of loops?
     for (auto loop_it = 0; loop_it < num_loops; loop_it++) {
+
+        /* 
+        * DMR HINT
+        * Potentially handle the case where the program is waiting for resources
+        * The wait is non-blocking, so computation can be performed while waiting for them
+        * with the resources that we do have.
+        */
+
         // Rank and size may have changed due to malleability
+        /* 
+        * DMR HINT
+        * Any change in rank and size would have already occured at the program's start point
+        */
+
         MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
         MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
