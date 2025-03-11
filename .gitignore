@@ -55,3 +55,8 @@ Thumbs.db
 
 # Build directory
 build/
+
+# StreamFlow
+.streamflow
+report.html
+output.txt

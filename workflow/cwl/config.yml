@@ -1,0 +1,19 @@
+annealing_src:
+  - class: File
+    path: ../../SimulatedAnnealing/Makefile
+  - class: Directory
+    path: ../../SimulatedAnnealing/src
+clustering_src:
+  - class: File
+    path: ../../Makefile
+  - class: File
+    path: ../../clustering.cpp
+  - class: File
+    path: ../../points.cpp
+  - class: Directory
+    path: ../../include
+  - class: Directory
+    path: ../../vendor
+points:
+  class: File
+  path: ../../data/input/cluster_points_article.csv
