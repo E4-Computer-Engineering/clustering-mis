@@ -1,7 +1,9 @@
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <mpi.h>
 #include <numeric>
 #include <ostream>
@@ -228,6 +230,73 @@ void wait_for_file(const std::string &flag_file) {
     }
 }
 
+double euclidean_distance(point &a, point &b) {
+    return std::hypot(a.x - b.x, a.y - b.y);
+}
+
+/*
+Compute Silhoutte score using Euclidean distance as the distance metric
+https://en.wikipedia.org/wiki/Silhouette_(clustering)
+*/
+double silhouette(std::vector<point> pts, std::vector<int> labels) {
+    if (pts.empty()) {
+        std::cerr << "Cannot compute Silhoutte score from empty data"
+                  << std::endl;
+        return -1.0;
+    }
+
+    auto clusters = std::map<size_t, std::vector<size_t>>();
+
+    for (auto i = 0; i < pts.size(); i++) {
+        auto label = labels[i];
+        if (!clusters.contains(label)) {
+            clusters[label] = std::vector<size_t>();
+        }
+        clusters[label].emplace_back(i);
+    }
+
+    auto s_values = std::vector<double>(pts.size());
+    for (auto i = 0; i < pts.size(); i++) {
+        auto label = labels[i];
+        auto cluster_size = clusters[label].size();
+        double a, b;
+
+        // Dissimilarities within the same cluster
+        if (cluster_size == 1) {
+            // a(i) can be defined as 0 when a cluster contains a single element
+            a = 0;
+        } else {
+            double num = 0;
+            // We do not need to skip the distance between i and i itself
+            // because it is 0
+            for (auto j : clusters[label]) {
+                num += euclidean_distance(pts[i], pts[j]);
+            }
+            a = num / (cluster_size - 1);
+        }
+
+        // Dissimilarities to other clusters
+        auto distances = std::vector<double>();
+        for (auto const &[key, val] : clusters) {
+            if (key == label)
+                continue;
+
+            double num = 0;
+            for (auto j : val) {
+                num += euclidean_distance(pts[i], pts[j]);
+            }
+            distances.emplace_back(num / val.size());
+        }
+        b = *std::min_element(distances.begin(), distances.end());
+        double s = (b - a) / std::max(a, b);
+
+        s_values[i] = s;
+    }
+
+    return std::accumulate(s_values.begin(), s_values.end(), 0.0) /
+           s_values.size();
+}
+
 int main(int argc, char **argv) {
     std::string quantum_job_output_name = "quantum_job_output.txt";
 
@@ -353,6 +422,15 @@ int main(int argc, char **argv) {
                    MPI_INT, 0, MPI_COMM_WORLD);
 
         if (my_rank == 0) {
+            //TODO remove this loop, only meant for debugging Silhoutte score computation
+            for (auto m_id = 0; m_id < num_methods; m_id++) {
+                auto curr_labels =
+                    std::vector<int>(all_res.begin() + num_points * m_id,
+                                     all_res.begin() + num_points * (m_id + 1));
+                std::cout << "Silhoutte of method " << m_id << ": "
+                          << silhouette(pts, curr_labels) << std::endl;
+            }
+
             std::cout << "Total number of clusters is " << ncl_tot << std::endl;
 
             std::vector<std::set<int>> cluster_elems(ncl_tot);
