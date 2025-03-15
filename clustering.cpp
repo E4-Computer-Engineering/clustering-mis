@@ -230,7 +230,7 @@ void wait_for_file(const std::string &flag_file) {
     }
 }
 
-double euclidean_distance(point &a, point &b) {
+double euclidean_distance(const point &a, const point &b) {
     return std::hypot(a.x - b.x, a.y - b.y);
 }
 
@@ -238,7 +238,7 @@ double euclidean_distance(point &a, point &b) {
 Compute Silhoutte score using Euclidean distance as the distance metric
 https://en.wikipedia.org/wiki/Silhouette_(clustering)
 */
-double silhouette(std::vector<point> pts, std::vector<int> labels) {
+double silhouette(const std::vector<point> &pts, const std::vector<int> &labels) {
     if (pts.empty()) {
         std::cerr << "Cannot compute Silhoutte score from empty data"
                   << std::endl;
