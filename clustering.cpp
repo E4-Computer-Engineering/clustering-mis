@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <istream>
 #include <map>
 #include <mpi.h>
 #include <numeric>
@@ -18,6 +19,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 using ClusFuncType =
@@ -111,8 +113,10 @@ int save_clusters(const std::string &file_name,
     }
 }
 
-void read_points(std::istream &file, std::vector<point> &points) {
+std::vector<point> read_points(std::istream &file) {
+    std::vector<point> points;
     std::string line;
+
     std::getline(file, line); // Skip first line
 
     while (std::getline(file, line)) {
@@ -125,6 +129,47 @@ void read_points(std::istream &file, std::vector<point> &points) {
             points.emplace_back(p);
         }
     }
+
+    return points;
+}
+
+std::vector<std::vector<size_t>> read_clusters(std::istream &file) {
+    std::vector<std::vector<size_t>> clusters;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        size_t idx;
+        char delimiter;
+        std::vector<size_t> vals = std::vector<size_t>();
+
+        while (ss >> idx) {
+            ss >> delimiter;
+            vals.emplace_back(idx);
+        }
+        clusters.emplace_back(vals);
+    }
+
+    return clusters;
+}
+
+std::vector<bool> read_annealing_output(std::istream &file) {
+    std::vector<bool> solution;
+    std::string line;
+
+    std::getline(file, line);
+
+    std::istringstream ss(line);
+    bool active;
+    char delimiter;
+    std::vector<size_t> vals = std::vector<size_t>();
+
+    while (ss >> active) {
+        ss >> delimiter;
+        solution.emplace_back(active);
+    }
+
+    return solution;
 }
 
 /* 
@@ -238,63 +283,153 @@ double euclidean_distance(const point &a, const point &b) {
 Compute Silhoutte score using Euclidean distance as the distance metric
 https://en.wikipedia.org/wiki/Silhouette_(clustering)
 */
-double silhouette(const std::vector<point> &pts, const std::vector<int> &labels) {
+double silhouette(std::map<size_t, std::vector<point>> &clusters) {
+    if (clusters.empty()) {
+        std::cerr << "Cannot compute Silhoutte score from empty data"
+                  << std::endl;
+        return -1.0;
+    }
+
+    auto s_values = std::vector<double>();
+
+    for (auto const &[this_label, this_points] : clusters) {
+        auto cluster_size = this_points.size();
+        for (auto const i : this_points) {
+            double a, b;
+            // Dissimilarities within the same cluster
+            if (cluster_size == 1) {
+                // a(i) can be defined as 0 when a cluster contains a single
+                // element
+                a = 0;
+            } else {
+                double num = 0;
+                // We do not need to skip the distance between i and i itself
+                // because it is 0
+                for (auto const j : this_points) {
+                    num += euclidean_distance(i, j);
+                }
+                a = num / (cluster_size - 1);
+            }
+
+            // Dissimilarities to other clusters
+            auto distances = std::vector<double>();
+            for (auto const &[other_label, other_points] : clusters) {
+                if (other_label == this_label)
+                    continue;
+
+                double num = 0;
+                for (auto j : other_points) {
+                    num += euclidean_distance(i, j);
+                }
+                distances.emplace_back(num / other_points.size());
+            }
+            b = *std::min_element(distances.begin(), distances.end());
+
+            double s = (b - a) / std::max(a, b);
+            s_values.emplace_back(s);
+        }
+    }
+
+    return std::accumulate(s_values.begin(), s_values.end(), 0.0) /
+           s_values.size();
+}
+
+/*
+Compute Silhoutte score using Euclidean distance as the distance metric:
+https://en.wikipedia.org/wiki/Silhouette_(clustering)
+All points are assumed to be assigned to a cluster.
+*/
+double silhouette(const std::vector<point> &pts,
+                  const std::vector<int> &labels) {
     if (pts.empty()) {
         std::cerr << "Cannot compute Silhoutte score from empty data"
                   << std::endl;
         return -1.0;
     }
 
-    auto clusters = std::map<size_t, std::vector<size_t>>();
+    auto clusters = std::map<size_t, std::vector<point>>();
 
     for (auto i = 0; i < pts.size(); i++) {
         auto label = labels[i];
         if (!clusters.contains(label)) {
-            clusters[label] = std::vector<size_t>();
+            clusters[label] = std::vector<point>();
         }
-        clusters[label].emplace_back(i);
+        clusters[label].emplace_back(pts[i]);
+    }
+    return silhouette(clusters);
+}
+
+void clusters_to_csv(const std::map<size_t, std::vector<point>> &clusters,
+                     std::string filename) {
+    std::ofstream out_file(filename);
+    if (!out_file) {
+        std::cerr << "Error opening csv file." << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    out_file << "x\ty\tlabel" << std::endl;
+    for (const auto &[k, v] : clusters) {
+        for (auto it = v.begin(); it != v.end(); it++) {
+            out_file << it->x << "\t" << it->y << "\t" << k << std::endl;
+        }
+    }
+}
+
+/*
+Read input points file, intermediate clustering file and quantum job output to
+reconstruct the corresponding clusters.
+The resulting clusters and the unclassified points are inserted into the last
+two arguments.
+*/
+void parse_quantum_job_output(
+    const std::string &points_name, const std::string &clusters_name,
+    const std::string &quantum_job_output_name,
+    std::map<size_t, std::vector<point>> &solution_clusters,
+    std::vector<point> &outliers) {
+
+    std::ifstream file(points_name);
+    if (!file) {
+        std::cerr << "Error opening points file." << std::endl;
+        std::exit(EXIT_FAILURE);
     }
 
-    auto s_values = std::vector<double>(pts.size());
+    auto pts = read_points(file);
+
+    std::ifstream clusters_file(clusters_name);
+    if (!clusters_file) {
+        std::cerr << "Error opening clusters file." << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    auto all_clusters = read_clusters(clusters_file);
+
+    std::ifstream quantum_job_file(quantum_job_output_name);
+    if (!quantum_job_file) {
+        std::cerr << "Error opening quantum output file." << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    auto solution = read_annealing_output(quantum_job_file);
+
+    std::unordered_set<size_t> outliers_idx;
     for (auto i = 0; i < pts.size(); i++) {
-        auto label = labels[i];
-        auto cluster_size = clusters[label].size();
-        double a, b;
-
-        // Dissimilarities within the same cluster
-        if (cluster_size == 1) {
-            // a(i) can be defined as 0 when a cluster contains a single element
-            a = 0;
-        } else {
-            double num = 0;
-            // We do not need to skip the distance between i and i itself
-            // because it is 0
-            for (auto j : clusters[label]) {
-                num += euclidean_distance(pts[i], pts[j]);
-            }
-            a = num / (cluster_size - 1);
-        }
-
-        // Dissimilarities to other clusters
-        auto distances = std::vector<double>();
-        for (auto const &[key, val] : clusters) {
-            if (key == label)
-                continue;
-
-            double num = 0;
-            for (auto j : val) {
-                num += euclidean_distance(pts[i], pts[j]);
-            }
-            distances.emplace_back(num / val.size());
-        }
-        b = *std::min_element(distances.begin(), distances.end());
-        double s = (b - a) / std::max(a, b);
-
-        s_values[i] = s;
+        outliers_idx.insert(i);
     }
 
-    return std::accumulate(s_values.begin(), s_values.end(), 0.0) /
-           s_values.size();
+    // Get indices of selected clusters
+    for (size_t i = 0; i < solution.size(); i++) {
+        if (solution[i]) {
+            auto this_cluster_points = std::vector<point>();
+            for (const auto pts_idx : all_clusters[i]) {
+                this_cluster_points.emplace_back(pts[pts_idx]);
+                outliers_idx.erase(pts_idx);
+            }
+            solution_clusters[i] = this_cluster_points;
+        }
+    }
+
+    for (auto i : outliers_idx) {
+        outliers.emplace_back(pts[i]);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -334,7 +469,7 @@ int main(int argc, char **argv) {
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
 
-        read_points(file, pts);
+        pts = read_points(file);
         num_points = pts.size();
     }
 
@@ -422,7 +557,8 @@ int main(int argc, char **argv) {
                    MPI_INT, 0, MPI_COMM_WORLD);
 
         if (my_rank == 0) {
-            //TODO remove this loop, only meant for debugging Silhoutte score computation
+            // TODO remove this loop, only meant for debugging Silhoutte score
+            // computation
             for (auto m_id = 0; m_id < num_methods; m_id++) {
                 auto curr_labels =
                     std::vector<int>(all_res.begin() + num_points * m_id,
@@ -487,8 +623,9 @@ int main(int argc, char **argv) {
 
             // TODO remove this block
             // Placeholder until the calling interface will be defined.
-            std::ofstream qjob_output(quantum_job_output_name);
-            qjob_output.close();
+            if (!std::filesystem::exists(quantum_job_output_name))
+                std::ofstream qjob_output(quantum_job_output_name);
+
             std::ofstream qjob_output_flag(flag_file_name);
             qjob_output_flag.close();
 
@@ -503,5 +640,25 @@ int main(int argc, char **argv) {
     }
 
     MPI_Finalize();
+    return 0;
+}
+
+int testing_main() {
+    std::string points = "data/input/cluster_points_article.csv";
+    std::string clusters_name = "cluster_indices.txt";
+    std::string quantum_job = "quantum_job_output.txt";
+    std::map<size_t, std::vector<point>> solution_clusters;
+    std::vector<point> outliers;
+    parse_quantum_job_output(points, clusters_name, quantum_job,
+                             solution_clusters, outliers);
+    clusters_to_csv(solution_clusters, std::string("mis_output.txt"));
+    std::cout << "Selected " << solution_clusters.size() << " clusters"
+              << std::endl;
+    std::cout << "Silhoutte score of result: " << silhouette(solution_clusters)
+              << std::endl;
+    std::cout << "Outliers count: " << outliers.size() << std::endl;
+    auto outliers_cluster = std::map<size_t, std::vector<point>>();
+    outliers_cluster[0] = outliers;
+    clusters_to_csv(outliers_cluster, std::string("mis_outliers.txt"));
     return 0;
 }
