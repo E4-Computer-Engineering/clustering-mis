@@ -93,8 +93,8 @@ int save_matrix(const std::string &file_name,
     }
 }
 
-int save_clusters(const std::string &file_name,
-                  std::vector<std::set<int>> cluster_elems) {
+int save_indexed_clusters(const std::string &file_name,
+                          std::vector<std::set<int>> cluster_elems) {
     std::ofstream file(file_name);
     if (!file) {
         std::cerr << "Error opening file." << std::endl;
@@ -360,7 +360,7 @@ double silhouette(const std::vector<point> &pts,
 }
 
 int clusters_to_csv(const std::map<size_t, std::vector<point>> &clusters,
-                     std::string filename) {
+                    std::string filename) {
     std::ofstream out_file(filename);
     if (!out_file) {
         std::cerr << "Error opening csv file." << std::endl;
@@ -436,10 +436,32 @@ int parse_quantum_job_output(
     return EXIT_SUCCESS;
 }
 
+/*
+Write clusters to a (Tab-separated values) file containing the coordinates and
+the assigned cluster of each point.
+*/
+int save_clusters(const std::string &filename,
+                  const std::map<size_t, std::vector<point>> &clusters) {
+    std::ofstream file(filename);
+    if (!file) {
+        std::cerr << "Error opening clusters file." << std::endl;
+        return EXIT_FAILURE;
+    }
+    // Header
+    file << "x\ty\tlabel" << std::endl;
+    // Values
+    for (const auto &[k, v] : clusters) {
+        for (auto &p : v) {
+            file << p.x << "\t" << p.y << "\t" << k << std::endl;
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
 int save_best_solution(double silhoutte_score,
                        const std::string &silhoutte_name,
-                       const std::string &clusters_name,
-                       const std::string &quantum_job_output_name) {
+                       const std::map<size_t, std::vector<point>> &clusters,
+                       const std::string &clusters_name) {
     std::ofstream silhoutte_file(silhoutte_name);
     if (!silhoutte_file) {
         std::cerr << "Error opening silhoutte file." << std::endl;
@@ -447,24 +469,16 @@ int save_best_solution(double silhoutte_score,
     }
     silhoutte_file << silhoutte_score;
 
-    auto success = std::filesystem::copy_file(
-        clusters_name, clusters_name + ".best",
-        std::filesystem::copy_options::overwrite_existing);
-    success &= std::filesystem::copy_file(
-        quantum_job_output_name, quantum_job_output_name + ".best",
-        std::filesystem::copy_options::overwrite_existing);
-    if (!success) {
-        std::cerr << "Something went wrong while copying files" << std::endl;
-        return EXIT_FAILURE;
-    }
+    auto status = save_clusters(clusters_name, clusters);
 
-    return EXIT_SUCCESS;
+    return status;
 }
 
 int main(int argc, char **argv) {
     std::string quantum_job_output_name = "quantum_job_output.txt";
-    //TODO make it configurable?
+    // TODO make these configurable?
     std::string best_silhoutte_name = "best_silhoutte.txt";
+    std::string best_clusters_name = "best_cluster.txt";
 
     int my_rank, num_processes;
 
@@ -631,7 +645,8 @@ int main(int argc, char **argv) {
                     MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
                 }
                 if (argc > 3) {
-                    auto clus_status = save_clusters(argv[3], cluster_elems);
+                    auto clus_status =
+                        save_indexed_clusters(argv[3], cluster_elems);
                     if (clus_status == EXIT_FAILURE) {
                         std::cerr
                             << "Unable to write the obtained clusters to file."
@@ -645,12 +660,11 @@ int main(int argc, char **argv) {
         if (argc > 4) {
             quantum_job_output_name = argv[4];
         }
-
         std::string flag_file_name = quantum_job_output_name + ".flag";
         // Placeholder to launch the quantum job
         if (my_rank == 0 && argc > 3) {
             // Actual calling:
-            // system(executable, argv[3], quantum_job_output_name,...)
+            // system(executable, argv[2], quantum_job_output_name,...)
 
             // TODO remove this block
             // Placeholder until the calling interface will be defined.
@@ -665,14 +679,13 @@ int main(int argc, char **argv) {
             // The flag can be removed after being detected
             std::filesystem::remove(flag_file_name);
 
-            std::cout << "Iteration number " << loop_it << " done" << std::endl;
-
             std::map<size_t, std::vector<point>> current_clusters;
             std::vector<point> outliers;
 
             auto status = parse_quantum_job_output(argv[1], argv[3],
                                                    quantum_job_output_name,
                                                    current_clusters, outliers);
+
             if (status == EXIT_FAILURE) {
                 std::cerr << "Something went wrong while reading files."
                           << std::endl;
@@ -683,7 +696,7 @@ int main(int argc, char **argv) {
 
             if (!std::filesystem::exists(best_silhoutte_name)) {
                 save_best_solution(current_silhoutte_score, best_silhoutte_name,
-                                   argv[3], quantum_job_output_name);
+                                   current_clusters, best_clusters_name);
             } else {
                 std::ifstream best_silhouette_file(best_silhoutte_name);
                 if (!best_silhouette_file) {
@@ -691,7 +704,6 @@ int main(int argc, char **argv) {
                               << std::endl;
                     MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
                 }
-
                 std::string line;
                 std::getline(best_silhouette_file, line);
                 std::istringstream ss(line);
@@ -700,8 +712,8 @@ int main(int argc, char **argv) {
                 ss >> best_silhoutte_score;
                 if (current_silhoutte_score > best_silhoutte_score) {
                     save_best_solution(current_silhoutte_score,
-                                       best_silhoutte_name, argv[3],
-                                       quantum_job_output_name);
+                                       best_silhoutte_name, current_clusters,
+                                       best_clusters_name);
                 }
             }
         }
@@ -719,7 +731,8 @@ int testing_main() {
     std::vector<point> outliers;
     parse_quantum_job_output(points, clusters_name, quantum_job,
                              solution_clusters, outliers);
-    auto output_status = clusters_to_csv(solution_clusters, std::string("mis_output.txt"));
+    auto output_status =
+        clusters_to_csv(solution_clusters, std::string("mis_output.txt"));
     std::cout << "Selected " << solution_clusters.size() << " clusters"
               << std::endl;
     std::cout << "Silhoutte score of result: " << silhouette(solution_clusters)
@@ -727,6 +740,7 @@ int testing_main() {
     std::cout << "Outliers count: " << outliers.size() << std::endl;
     auto outliers_cluster = std::map<size_t, std::vector<point>>();
     outliers_cluster[0] = outliers;
-    auto outliers_status = clusters_to_csv(outliers_cluster, std::string("mis_outliers.txt"));
+    auto outliers_status =
+        clusters_to_csv(outliers_cluster, std::string("mis_outliers.txt"));
     return 0;
 }
