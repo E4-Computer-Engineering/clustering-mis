@@ -474,6 +474,34 @@ int save_best_solution(double silhoutte_score,
     return status;
 }
 
+void assign_outliers(std::map<size_t, std::vector<point>> &clusters,
+                     const std::vector<point> &outliers) {
+    // Find the centroid of each cluster
+    std::map<size_t, point> centroids;
+    for (auto &[k, v] : clusters) {
+        auto x = std::accumulate(
+                     v.begin(), v.end(), 0.0,
+                     [](auto accum, const auto &pt) { return accum + pt.x; }) /
+                 v.size();
+        auto y = std::accumulate(
+                     v.begin(), v.end(), 0.0,
+                     [](auto accum, const auto &pt) { return accum + pt.y; }) /
+                 v.size();
+        centroids[k] = point{x, y};
+    }
+    // Assign each outlier to the closest existing cluster
+    for (const auto &outlier : outliers) {
+        std::map<size_t, double> distances;
+        for (const auto &[k, centroid] : centroids) {
+            distances[k] = euclidean_distance(outlier, centroid);
+        }
+        auto smallest_distance = std::min_element(
+            distances.begin(), distances.end(),
+            [](const auto &l, const auto &r) { return l.second < r.second; });
+        clusters[smallest_distance->first].emplace_back(outlier);
+    }
+}
+
 int main(int argc, char **argv) {
     std::string quantum_job_output_name = "quantum_job_output.txt";
     // TODO make these configurable?
@@ -691,6 +719,10 @@ int main(int argc, char **argv) {
                           << std::endl;
                 MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
             }
+
+            // TODO remove outliers management if unnecessary
+            // We currently want all points to be assigned to a cluster
+            assign_outliers(current_clusters, outliers);
 
             auto current_silhoutte_score = silhouette(current_clusters);
 
