@@ -429,8 +429,13 @@ int save_best_solution(double silhoutte_score,
     return status;
 }
 
-void assign_outliers(std::map<size_t, std::vector<point>> &clusters,
-                     const std::vector<point> &outliers) {
+int assign_outliers(std::map<size_t, std::vector<point>> &clusters,
+                    const std::vector<point> &outliers) {
+    if (clusters.empty()) {
+        std::cerr << "Cannot add outliers to empty clusters" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     // Find the centroid of each cluster
     std::map<size_t, point> centroids;
     for (auto &[k, v] : clusters) {
@@ -444,6 +449,7 @@ void assign_outliers(std::map<size_t, std::vector<point>> &clusters,
                  v.size();
         centroids[k] = point{x, y};
     }
+
     // Assign each outlier to the closest existing cluster
     for (const auto &outlier : outliers) {
         std::map<size_t, double> distances;
@@ -455,6 +461,8 @@ void assign_outliers(std::map<size_t, std::vector<point>> &clusters,
             [](const auto &l, const auto &r) { return l.second < r.second; });
         clusters[smallest_distance->first].emplace_back(outlier);
     }
+
+    return EXIT_SUCCESS;
 }
 
 int main(int argc, char **argv) {
@@ -651,8 +659,7 @@ int main(int argc, char **argv) {
 
             // TODO remove outliers management if unnecessary
             // We currently want all points to be assigned to a cluster
-            assign_outliers(current_clusters, outliers);
-
+            auto outliers_status = assign_outliers(current_clusters, outliers);
             auto current_silhoutte_score = silhouette(current_clusters);
 
             if (!std::filesystem::exists(best_silhoutte_name)) {
