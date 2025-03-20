@@ -34,13 +34,23 @@ bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
     return false;
 }
 
-std::vector<std::vector<int>>
+std::vector<std::vector<double>>
 create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
+    // We want to give a different weight to each diagonal term. Otherwise, if
+    // all clusters are considered equally good, the annealer will choose a
+    // solution with many small clusters.
+    std::vector<size_t> sizes(clusters.size());
+    std::transform(clusters.begin(), clusters.end(), sizes.begin(),
+                   [](const auto &cl) { return cl.size(); });
+    // The biggest cluster will have a weight of 1. The others will be
+    // normalized to be smaller, but in the range 0 < x < 1.
+    auto max_size = *std::max_element(sizes.begin(), sizes.end());
+
     auto n = clusters.size();
     auto penalty = n;
 
     // Initialize empty matrix
-    std::vector<std::vector<int>> res(n, std::vector<int>(n, 0));
+    std::vector<std::vector<double>> res(n, std::vector<double>(n, 0.0));
 
     // Add penalty to overlapping clusters
     for (auto i = 0; i < n - 1; i++) {
@@ -53,13 +63,13 @@ create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
 
     // Set diagonal terms
     for (auto i = 0; i < n; i++) {
-        res[i][i] = -1;
+        res[i][i] = -(double)sizes[i] / max_size;
     }
     return res;
 }
 
 void write_matrix(std::ostream &out_stream,
-                  const std::vector<std::vector<int>> &m) {
+                  const std::vector<std::vector<double>> &m) {
     for (auto i : m) {
         for (auto j = i.begin(); j != i.end(); j++) {
             if (j != i.begin()) {
@@ -71,12 +81,12 @@ void write_matrix(std::ostream &out_stream,
     }
 }
 
-void print_matrix(const std::vector<std::vector<int>> &m) {
+void print_matrix(const std::vector<std::vector<double>> &m) {
     write_matrix(std::cout, m);
 }
 
 int save_matrix(const std::string &file_name,
-                const std::vector<std::vector<int>> &m) {
+                const std::vector<std::vector<double>> &m) {
     std::ofstream file(file_name);
     if (!file) {
         std::cerr << "Error opening file." << std::endl;
