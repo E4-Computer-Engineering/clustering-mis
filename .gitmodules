@@ -1,0 +1,3 @@
+[submodule "SimulatedAnnealing"]
+	path = SimulatedAnnealing
+	url = ../SimulatedAnnealing.git

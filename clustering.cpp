@@ -638,21 +638,33 @@ int main(int argc, char **argv) {
         std::string flag_file_name = quantum_job_output_name + ".flag";
         // Placeholder to launch the quantum job
         if (my_rank == 0 && argc > 3) {
-            // Actual calling:
-            // system(executable, argv[2], quantum_job_output_name,...)
+            // TODO remove the legacy else block
+            auto use_hq = true;
+            if (use_hq) {
+                // TODO escape arguments sent to std::system?
+                std::string command =
+                    "SimulatedAnnealing/build/bin/simAnnSingle.out ";
+                command += argv[2];
+                command += " ";
+                command += quantum_job_output_name;
+                // Specifying --wait removes the need to parse the given job ID
+                auto hq_command = std::string("hq submit --wait ") + command;
 
-            // TODO remove this block
-            // Placeholder until the calling interface will be defined.
-            if (!std::filesystem::exists(quantum_job_output_name))
-                std::ofstream qjob_output(quantum_job_output_name);
+                std::system(hq_command.c_str());
+            } else {
+                // Placeholder until the calling interface will be defined.
+                if (!std::filesystem::exists(quantum_job_output_name))
+                    std::ofstream qjob_output(quantum_job_output_name);
 
-            std::ofstream qjob_output_flag(flag_file_name);
-            qjob_output_flag.close();
+                std::ofstream qjob_output_flag(flag_file_name);
+                qjob_output_flag.close();
 
-            // We expect to have the output available if the flag is detected
-            wait_for_file(flag_file_name);
-            // The flag can be removed after being detected
-            std::filesystem::remove(flag_file_name);
+                // We expect to have the output available if the flag is
+                // detected
+                wait_for_file(flag_file_name);
+                // The flag can be removed after being detected
+                std::filesystem::remove(flag_file_name);
+            }
 
             std::map<size_t, std::vector<point>> current_clusters;
             std::vector<point> outliers;
