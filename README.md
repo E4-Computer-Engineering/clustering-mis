@@ -19,11 +19,18 @@ You can add one more optional argument to save the indices of points that compri
 ```bash
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
 ```
+### Looping application
 To enable a looping approach, another argument can be added. This argument is the file where the quantum job will write its result. If not provided, it will be called "quantum_job_output.txt":
 ```bash
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt quantum_job_output.txt
 ```
+Beware that for the looping approach to work you will also need to pull the `SimulatedAnnealing` submodule, enter its directory and run the `make` command.
+HyperQueue is also required. If you are testing the application on qluster, open two terminals inside asvsys02, load the HyperQueue module and run these commands respectively:
+1) `hq server start`
+2) `hq alloc add slurm --time-limit 01:00:00 --workers-per-alloc 1 --max-worker-count 1 --idle-timeout 30s -- --partition=quantum`
+
 ### Expected output
+#### Standalone
 Running the clustering executable will create an overlap matrix in the following form:
 ```
 -1 8 8 8 0 0 0 0
@@ -44,6 +51,12 @@ If you choose to also save the points of each cluster, they will be in this form
 6,8,9
 ```
 Each line corresponds to a different cluster. Each of its comma-separated values corresponds to a point from the original input file.
+
+#### Looping approach
+The files from the previous section will be created. Two additional files will be created, containing:
+1) The Silhoutte score of the final clustering
+2) The final association between points and assigned clusters, in tab-separated values format
+
 ## TODO
 - [ ] Add brief description with images
 
