@@ -6,9 +6,11 @@ This work is based upon the approach from [A clustering aggregation algorithm on
 
 Make sure to have a working MPI installation available. Its include path should either be added to `$INCLUDE` or `$MPI_INC`.
 
-The code can be compiled using `make`. The newly built executable will be under the build/bin directory.
+The code can be compiled using `make`. Relevant executables will be under the build/bin directory.
 
-The code can be run as follows:
+### Clustering
+
+The clustering executable can be run as follows:
 
 ```bash
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv
@@ -26,9 +28,25 @@ You can add one more optional argument to save the indices of points that compri
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
 ```
 
-### Expected output
+### Silhouette
 
-Running the clustering executable will create an overlap matrix in the following form:
+The Silhouette score computation executable can be run as follows:
+
+```bash
+build/bin/silhouette data/input/cluster_points_article.csv cluster_indices.txt quantum_job_output.txt
+```
+
+You can add another argument if you want to save the score to a specific file, e.g.:
+
+```bash
+build/bin/silhouette data/input/cluster_points_article.csv cluster_indices.txt quantum_job_output.txt s-score.txt
+```
+
+## Expected output
+
+### Clustering
+
+Running the `clustering` executable will create an overlap matrix in the following form:
 
 ```
 -1 8 8 8 0 0 0 0
@@ -52,6 +70,10 @@ If you choose to also save the points of each cluster, they will be in this form
 ```
 
 Each line corresponds to a different cluster. Each of its comma-separated values corresponds to a point from the original input file.
+
+### Silhouette
+
+Running the `silhouette` executable will compute and output the Silhouette score of a given clustering as a decimal number between -1 and 1. 
 
 ## Workflow run
 

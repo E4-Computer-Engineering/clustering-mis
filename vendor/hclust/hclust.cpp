@@ -1,4 +1,4 @@
-#include "points.h"
+#include "common.h"
 #include "fastcluster.hpp"
 #include <cmath>
 #include <cstddef>

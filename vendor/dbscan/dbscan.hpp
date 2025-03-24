@@ -6,7 +6,7 @@
 #include <span>
 #include <vector>
 #include <cstdlib>
-#include "points.h"
+#include "common.h"
 
 struct point2
 {

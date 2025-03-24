@@ -15,7 +15,7 @@
 #include <string.h>
 
 #include "kmeans_cl.h"
-#include "points.h"
+#include "common.h"
 
 #ifdef KMEANS_THREADED
 #include <pthread.h>

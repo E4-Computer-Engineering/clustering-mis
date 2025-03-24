@@ -8,11 +8,10 @@
 #include <span>
 #include <stdlib.h>
 
-#include "points.h"
+#include "common.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -117,22 +116,6 @@ int save_clusters(const std::string &file_name,
     }
 }
 
-void read_points(std::istream &file, std::vector<point> &points) {
-    std::string line;
-    std::getline(file, line); // Skip first line
-
-    while (std::getline(file, line)) {
-        std::istringstream ss(line);
-        point p;
-        char comma;
-
-        // Read x and y, assuming CSV format
-        if (ss >> p.x >> comma >> p.y) {
-            points.emplace_back(p);
-        }
-    }
-}
-
 // Return total number of clusters identified by each algorithm
 int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
@@ -213,7 +196,7 @@ int main(int argc, char **argv) {
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
 
-        read_points(file, pts);
+        pts = read_points(file);
         num_points = pts.size();
     }
 

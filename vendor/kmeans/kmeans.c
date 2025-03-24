@@ -1,5 +1,5 @@
 #include "kmeans_cl.h"
-#include "points.h"
+#include "common.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
