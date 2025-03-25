@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 static double pt_distance(const Pointer a, const Pointer b) {
@@ -45,7 +46,8 @@ static void pt_centroid(const Pointer *objs, const int *clusters,
     return;
 }
 
-int kmeans(int myrank, const char *str, const point *pts, int n, int *res) {
+int kmeans(int myrank, const char *str, const point *pts, int n, int *res,
+           int seed) {
 
     printf("I am rank %d and I am in the function %s\n", myrank, str);
 
@@ -56,9 +58,11 @@ int kmeans(int myrank, const char *str, const point *pts, int n, int *res) {
     bool print_results = false;
     unsigned long start;
 
-    int k = 7;
+    srand(seed + 0xE4 * 0);
 
-    srand(123);
+    int min_k = 4;
+    int max_k = 10;
+    int k = min_k + rand() / (RAND_MAX / (max_k - min_k + 1) + 1);
 
     /* Constants */
     config.k = k;

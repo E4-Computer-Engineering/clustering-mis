@@ -24,7 +24,7 @@
 #include <vector>
 
 using ClusFuncType =
-    std::function<int(int, const char *, const point *, int, int *)>;
+    std::function<int(int, const char *, const point *, int, int *, int)>;
 
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
@@ -233,7 +233,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
                               const std::vector<std::string> &methods,
                               std::vector<ClusFuncType> &functions,
-                              std::vector<int> &assigned_clusters) {
+                              std::vector<int> &assigned_clusters, int seed) {
     auto num_points = pts.size();
 
     // Each process can run more than one clustering algorithm.
@@ -257,7 +257,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
 
         auto res = functions[global_method_idx](
             my_rank, current_method_name.c_str(), pts.data(), num_points,
-            assigned_clusters.data() + local_method_idx * num_points);
+            assigned_clusters.data() + local_method_idx * num_points, seed);
 
         auto begin = assigned_clusters.begin() + local_method_idx * num_points;
         auto end = begin + num_points;
@@ -610,7 +610,7 @@ int main(int argc, char **argv) {
     // MALL If not first time call restart() and restore application status.
     // starting_it should become the last saved value of current_iteration.
 
-    int num_loops = 5; // TODO define a dynamic number of loops?
+    int num_loops = 10; // TODO define a dynamic number of loops?
 
     for (auto loop_it = starting_it; loop_it < num_loops; loop_it++) {
         /* 
@@ -649,7 +649,7 @@ int main(int argc, char **argv) {
                                                0);
             int ncl = run_clustering_algorithms(my_rank, num_methods_proc, pts,
                                                 num_methods, methods, functions,
-                                                assigned_clusters);
+                                                assigned_clusters, loop_it);
 
             std::vector<int> all_res; // Aggregation of all clustering results
                                       // across all processes
@@ -827,7 +827,8 @@ int main(int argc, char **argv) {
             }
         }
         ready_for_quantum = false;
-        // MALL request new resources if we need to execute another loop iteration
+        // MALL request new resources if we need to execute another loop
+        // iteration
     }
 
     MPI_Finalize();
