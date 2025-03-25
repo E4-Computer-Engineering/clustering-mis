@@ -9,11 +9,11 @@ requirements:
   ToolTimeLimit:
     timelimit: 300
 inputs:
-  annealing_src:
+  annealing:
     type:
       type: array
       items: [File, Directory]
-  clustering_src:
+  clustering:
     type:
       type: array
       items: [File, Directory]
@@ -31,21 +31,21 @@ steps:
   build-clustering:
     run: clt/build.cwl
     in:
-      src: clustering_src
+      src: clustering
       output_path:
         valueFrom: build/bin/clustering
     out: [output]
   build-annealing:
     run: clt/build.cwl
     in:
-      src: annealing_src
+      src: annealing
       output_path:
         valueFrom: build/bin/simAnnSingle.out
     out: [output]
   build-silhouette:
     run: clt/build.cwl
     in:
-      src: clustering_src
+      src: clustering
       output_path:
         valueFrom: build/bin/silhouette
     out: [output]
@@ -62,14 +62,14 @@ steps:
     run:
       class: Workflow
       inputs:
-        annealing_script: File
-        clustering_script: File
+        annealing: File
+        clustering: File
         points: File
         processes:
           type: int
           default: 3
         seed: int
-        silhouette_script: File
+        silhouette: File
       outputs:
         output:
           type: File
@@ -81,7 +81,7 @@ steps:
         clustering:
           run: clt/clustering.cwl
           in:
-            clustering: clustering_script
+            clustering: clustering
             points: points
             processes: processes
             seed: seed
@@ -89,27 +89,27 @@ steps:
         annealing:
           run: clt/annealing.cwl
           in:
-            annealing: annealing_script
+            annealing: annealing
             qubo: clustering/output
           out: [output]
         silhouette:
           run: clt/silhouette.cwl
           in:
-            silhouette: silhouette_script
+            silhouette: silhouette
             points: points
             indices: clustering/indices
             annealing: annealing/output
           out: [output]
     in:
-      annealing_script: build-annealing/output
-      clustering_script: build-clustering/output
+      annealing: build-annealing/output
+      clustering: build-clustering/output
       points: points
       processes: processes
       seed:
         default: 0
       score:
         default: 0.0
-      silhouette_script: build-silhouette/output
+      silhouette: build-silhouette/output
       threshold:
         default: 0.5
     out: [output, score]

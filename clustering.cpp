@@ -16,7 +16,7 @@
 #include <vector>
 
 using ClusFuncType =
-    std::function<int(int, const char *, const point *, int, int *)>;
+    std::function<int(int, const char *, const point *, int, int *, int)>;
 
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
@@ -121,7 +121,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
                               const std::vector<std::string> &methods,
                               std::vector<ClusFuncType> &functions,
-                              std::vector<int> &assigned_clusters) {
+                              std::vector<int> &assigned_clusters, int seed) {
     auto num_points = pts.size();
 
     // Each process can run more than one clustering algorithm.
@@ -145,7 +145,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
 
         auto res = functions[global_method_idx](
             my_rank, current_method_name.c_str(), pts.data(), num_points,
-            assigned_clusters.data() + local_method_idx * num_points);
+            assigned_clusters.data() + local_method_idx * num_points, seed);
 
         auto begin = assigned_clusters.begin() + local_method_idx * num_points;
         auto end = begin + num_points;
@@ -213,11 +213,13 @@ int main(int argc, char **argv) {
     auto num_methods_proc =
         std::ceil((float)num_methods / (float)num_processes);
 
+    int seed = argc > 4 ? std::stoi(argv[4]) : 0;
+
     // Run the algorithms assigned to this process and flatten their results
     std::vector<int> assigned_clusters(num_methods_proc * num_points, 0);
     int ncl =
         run_clustering_algorithms(my_rank, num_methods_proc, pts, num_methods,
-                                  methods, functions, assigned_clusters);
+                                  methods, functions, assigned_clusters, seed);
 
     std::vector<int> all_res;        // Aggregation of all clustering results
                                      // across all processes

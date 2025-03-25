@@ -18,13 +18,13 @@ void create_mpi_point_type(MPI_Datatype *mpi_point_type);
 extern "C" {
 #endif
 
-int kmeans(int myrank, const char *str, const point *pts, int np, int *res);
+int kmeans(int myrank, const char *str, const point *pts, int np, int *res, int seed);
 #ifdef __cplusplus
 }
 #endif
 
-int dbscan(int myrank, const char *str, const point *pts, int np, int *res_out);
-int hclust(int myrank, const char *str, const point *pts, int np, int *res_out);
+int dbscan(int myrank, const char *str, const point *pts, int np, int *res_out, int seed);
+int hclust(int myrank, const char *str, const point *pts, int np, int *res_out, int seed);
 
 std::vector<point> read_points(std::istream &file);
 std::vector<std::vector<size_t>> read_clusters(std::istream &file);

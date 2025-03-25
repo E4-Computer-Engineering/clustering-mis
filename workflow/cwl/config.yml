@@ -1,17 +1,15 @@
-annealing_src:
+annealing:
   - class: File
     path: ../../SimulatedAnnealing/Makefile
   - class: Directory
     path: ../../SimulatedAnnealing/src
-clustering_src:
+clustering:
   - class: File
     path: ../../Makefile
   - class: File
     path: ../../clustering.cpp
   - class: File
     path: ../../common.cpp
-  - class: File
-    path: ../../points.cpp
   - class: File
     path: ../../silhouette.cpp
   - class: Directory

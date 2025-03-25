@@ -28,6 +28,11 @@ You can add one more optional argument to save the indices of points that compri
 mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
 ```
 
+You can add another argument (integer) to specify the seed for the PRNG used by each clustering algorithm:
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt 5
+```
+
 ### Silhouette
 
 The Silhouette score computation executable can be run as follows:
