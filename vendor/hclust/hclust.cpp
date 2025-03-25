@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <fstream>
+#include <random>
 #include <vector>
 
 double distance(const point &a, const point &b) { return std::hypot(a.x - b.x, a.y - b.y); }
@@ -23,8 +24,14 @@ std::vector<double> create_distance_matrix(const point *data, size_t n) {
 }
 
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
-int hclust(int myrank, const char *str, const point *pts, int np, int *res) {
-    size_t NUM_CLUSTERS = 8;
+int hclust(int myrank, const char *str, const point *pts, int np, int *res, int seed) {
+    static std::default_random_engine eng;
+    eng.seed(seed + 0xE4 * 2);
+    auto min_k = 4;
+    auto max_k = 10;
+    static std::uniform_int_distribution<> dis(min_k, max_k); // range [min_k, max_k]
+    size_t NUM_CLUSTERS = dis(eng);
+
     auto distmat = create_distance_matrix(pts, np);
 
     int *merge = new int[2 * (np - 1)];
