@@ -6,22 +6,30 @@ workflows:
       file: cwl/main.cwl
       settings: cwl/config.yml
     bindings:
-      - step: /build-clustering
-        target:
-          deployment: leonardo
-          service: dcgp
-      - step: /clustering
-        target:
-          deployment: leonardo
-          service: dcgp
       - step: /build-annealing
         target:
           deployment: leonardo
           service: booster
-      - step: /annealing
+      - step: /build-clustering
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /build-silhouette
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /loop/clustering
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /loop/annealing
         target:
           deployment: leonardo
           service: booster
+      - step: /loop/silhouette
+        target:
+          deployment: leonardo
+          service: dcgp
 database:
   type: sqlite
   config:
@@ -39,7 +47,7 @@ deployments:
   leonardo:
     type: slurm
     config:
-      maxConcurrentJobs: 2
+      maxConcurrentJobs: 3
       services:
         booster:
           account: IscrC_SHPC-QC

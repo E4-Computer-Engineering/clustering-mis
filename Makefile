@@ -37,10 +37,10 @@ $(OBJ_DIR)/common.o: $(SRC_DIR)/common.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/kmeans_cl.o: $(KMEANS_LIB_DIR)/kmeans_cl.c $(KMEANS_LIB_DIR)/kmeans_cl.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/kmeans.o: $(KMEANS_LIB_DIR)/kmeans.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/dbscan.o: $(DBSCAN_LIB_DIR)/dbscan.cpp $(DBSCAN_LIB_DIR)/dbscan.hpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@

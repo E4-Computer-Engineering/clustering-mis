@@ -23,6 +23,10 @@ inputs:
     inputBinding:
       position: 1
       prefix: -n
+  seed:
+    type: int
+    inputBinding:
+      position: 6
 outputs:
   indices:
     type: File

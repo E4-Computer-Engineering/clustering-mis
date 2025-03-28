@@ -1,4 +1,5 @@
 #include "common.h"
+#include <algorithm>
 #include <cmath>
 #include <cstddef> // For offsetof
 #include <fstream>

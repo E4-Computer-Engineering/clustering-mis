@@ -9,7 +9,11 @@ clustering_src:
   - class: File
     path: ../../clustering.cpp
   - class: File
+    path: ../../common.cpp
+  - class: File
     path: ../../points.cpp
+  - class: File
+    path: ../../silhouette.cpp
   - class: Directory
     path: ../../include
   - class: Directory

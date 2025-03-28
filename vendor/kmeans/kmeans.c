@@ -68,17 +68,17 @@ int kmeans(int myrank, const char *str, const point *pts, int n, int *res) {
     config.centroid_method = pt_centroid;
 
     /* Inputs for K-means */
-    config.objs = calloc(config.num_objs, sizeof(Pointer));
-    config.centers = calloc(config.k, sizeof(Pointer));
-    config.clusters = calloc(config.num_objs, sizeof(int));
+    config.objs = (Pointer*) calloc(config.num_objs, sizeof(Pointer));
+    config.centers = (Pointer*) calloc(config.k, sizeof(Pointer));
+    config.clusters = (int *) calloc(config.num_objs, sizeof(int));
 
     /* Storage for raw data */
 
-    init = calloc(config.k, sizeof(point));
+    init = (point *) calloc(config.k, sizeof(point));
 
     for (i = 0; i < n; i++) {
         /* Pointer to raw data */
-        config.objs[i] = &(pts[i]);
+        config.objs[i] = (Pointer) &(pts[i]);
     }
 
     /* Populate the initial means vector with random start points */
