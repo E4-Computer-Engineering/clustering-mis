@@ -627,8 +627,8 @@ int main(int argc, char **argv) {
         int nodes_next_expand = 2;
         int procs_per_node = 5;
 
-        dmr_set_nodes_next_expand(); // Nodes to add in next expand
-        dmr_set_ppn_next_expand(); // Processes per node
+        dmr_set_nodes_next_expand(nodes_next_expand); // Nodes to add in next expand
+        dmr_set_ppn_next_expand(procs_per_node); // Processes per node
     }
 
     int num_loops = 10; // TODO define a dynamic number of loops?
