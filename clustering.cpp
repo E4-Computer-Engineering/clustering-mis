@@ -23,6 +23,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "dmr.h"
+
 using ClusFuncType =
     std::function<int(int, const char *, const point *, int, int *, int)>;
 
@@ -584,7 +586,9 @@ int main(int argc, char **argv) {
     MPI_Datatype MPI_POINT;
     create_mpi_point_type(&MPI_POINT);
 
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    
     std::vector<point> pts;
     int num_points;
     // Always read input file in rank 0
@@ -610,6 +614,23 @@ int main(int argc, char **argv) {
     // MALL If not first time call restart() and restore application status.
     // starting_it should become the last saved value of current_iteration.
 
+    // Edit to something reasonable
+    std::filesystem::path example_path = "/path/my_path/";
+    int ideal_processes = 10;
+    int timeout_s = 5;
+
+    DMR_AUTO(dmr_init(argc, argv), void(NULL), restart(my_rank, example_path, starting_it, ready_for_quantum), void(NULL));
+
+    if(my_rank == 0)
+    {
+        // Edit to your liking
+        int nodes_next_expand = 2;
+        int procs_per_node = 5;
+
+        dmr_set_nodes_next_expand(); // Nodes to add in next expand
+        dmr_set_ppn_next_expand(); // Processes per node
+    }
+
     int num_loops = 10; // TODO define a dynamic number of loops?
 
     for (auto loop_it = starting_it; loop_it < num_loops; loop_it++) {
@@ -620,16 +641,20 @@ int main(int argc, char **argv) {
         * with the resources that we do have.
         */
 
-        // Rank and size may have changed due to malleability
-        /* 
-        * DMR HINT
-        * Any change in rank and size would have already occured at the program's start point
-        */
-
-        MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
-        MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-
         if (!ready_for_quantum) {
+
+            if(num_processes < ideal_processes)
+            {
+                int time_start = MPI_Wtime();
+                while(MPI_Wtime() - time_start < timeout_s)
+                {
+                    DMR_AUTO(dmr_check(SHOULD_EXPAND), checkpoint(my_rank, example_path, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
+                }
+                
+                // If we reached this point, we timed out and we will just use the current process count
+                dmr_cancel_expansion();
+            }
+
             // Broadcast parsed input to other ranks
             MPI_Bcast(&num_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -752,6 +777,11 @@ int main(int argc, char **argv) {
 
             ready_for_quantum = true;
             // MALL remove unneeded resources
+            
+            if(dmr_get_active_expansions() > 0)
+            {
+                DMR_AUTO(dmr_check(SHOULD_MINIMIZE), checkpoint(my_rank, example_path, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
+            }
         }
 
         if (my_rank == 0 && argc > 3) {
