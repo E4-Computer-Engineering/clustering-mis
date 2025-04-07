@@ -619,11 +619,11 @@ int main(int argc, char **argv) {
     // starting_it should become the last saved value of current_iteration.
 
     // Edit to something reasonable
-    std::filesystem::path example_path = "/path/my_path/";
+    const std::filesystem::path checkpoint_folder = work_dir;
     int ideal_processes = 3;
     int timeout_s = 5;
 
-    DMR_AUTO(dmr_init(argc, argv), void(NULL), restart(my_rank, example_path, starting_it, ready_for_quantum), void(NULL));
+    DMR_AUTO(dmr_init(argc, argv), void(NULL), restart(my_rank, checkpoint_folder, starting_it, ready_for_quantum), void(NULL));
 
     if(my_rank == 0)
     {
@@ -652,7 +652,7 @@ int main(int argc, char **argv) {
                 int time_start = MPI_Wtime();
                 while(MPI_Wtime() - time_start < timeout_s)
                 {
-                    DMR_AUTO(dmr_check(SHOULD_EXPAND), checkpoint(my_rank, example_path, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
+                    DMR_AUTO(dmr_check(SHOULD_EXPAND), checkpoint(my_rank, checkpoint_folder, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
                 }
                 
                 // If we reached this point, we timed out and we will just use the current process count
@@ -777,7 +777,7 @@ int main(int argc, char **argv) {
             
             if(dmr_get_active_expansions() > 0)
             {
-                DMR_AUTO(dmr_check(SHOULD_MINIMIZE), checkpoint(my_rank, example_path, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
+                DMR_AUTO(dmr_check(SHOULD_MINIMIZE), checkpoint(my_rank, checkpoint_folder, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
             }
         }
 
