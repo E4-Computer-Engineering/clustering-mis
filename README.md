@@ -7,55 +7,26 @@ Make sure to have a working MPI installation available. Its include path should 
 
 The code can be compiled using `make`. The newly built executable will be under the build/bin directory.
 
-The code can be run as follows:
-```bash
-mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv
-```
-You can optionally add another argument to save the output matrix to file:
-```bash
-mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt
-```
-You can add one more optional argument to save the indices of points that comprise each cluster:
-```bash
-mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt
-```
-### Looping application
-To enable a looping approach, another argument can be added. This argument is the file where the quantum job will write its result. If not provided, it will be called "quantum_job_output.txt":
-```bash
-mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv example_output.txt cluster_indices.txt quantum_job_output.txt
-```
-Beware that for the looping approach to work you will also need to pull the `SimulatedAnnealing` submodule, enter its directory and run the `make` command.
+Beware that for the quantum emulation system to work you will also need to pull the `SimulatedAnnealing` submodule, enter its directory and run the `make` command.
 HyperQueue is also required. If you are testing the application on qluster, open two terminals inside asvsys02, load the HyperQueue module and run these commands respectively:
 1) `hq server start`
 2) `hq alloc add slurm --time-limit 01:00:00 --workers-per-alloc 1 --max-worker-count 1 --idle-timeout 30s -- --partition=quantum`
 
+The code can be run as follows:
+
+```bash
+mpirun -n 3 build/bin/clustering data/input/cluster_points_article.csv work_dir
+```
+
+The two required arguments are:
+1) The input CSV file
+2) The directory where intermediate and final outputs will be written. It is not necessary to manually create this directory beforehand.
+
 ### Expected output
-#### Standalone
-Running the clustering executable will create an overlap matrix in the following form:
-```
--1 8 8 8 0 0 0 0
-0 -1 0 8 0 0 0 0
-0 0 -1 8 8 0 8 0
-0 0 0 -1 0 8 0 8
-0 0 0 0 -1 0 8 0
-0 0 0 0 0 -1 0 8
-0 0 0 0 0 0 -1 8
-0 0 0 0 0 0 0 -1
-```
-Each column/row represent a possible cluster. The diagonal terms are equal to -1, the off-diagonal ones are either 0 or a positive integer $\lambda$. Positive values denote overlaps between clusters. The value of $\lambda$ is defined as the number of different clusters, in this case 8, in order to prevent the selection of overlapping clusters.
 
-If you choose to also save the points of each cluster, they will be in this form:
-```
-0,1,3,4
-2,5,7
-6,8,9
-```
-Each line corresponds to a different cluster. Each of its comma-separated values corresponds to a point from the original input file.
-
-#### Looping approach
-The files from the previous section will be created. Two additional files will be created, containing:
-1) The Silhoutte score of the final clustering
-2) The final association between points and assigned clusters, in tab-separated values format
+Some intermediate files will be created inside the working directory (last argument). Two additional output files will be created, containing:
+1) The Silhoutte score of the final clustering (best_silhouette.txt)
+2) The final association between points and assigned clusters, in tab-separated values format (best_cluster.txt)
 
 ## TODO
 - [ ] Add brief description with images
