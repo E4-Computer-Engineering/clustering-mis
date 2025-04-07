@@ -284,7 +284,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
 // Wait until the given file exists
 void wait_for_file(const std::string &flag_file) {
     while (!std::filesystem::exists(flag_file)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -788,6 +788,8 @@ int main(int argc, char **argv) {
             // TODO remove the legacy else block
             auto use_hq = true;
             if (use_hq) {
+                // Remove last output (NFS might provide stale files?)
+                std::filesystem::remove(quantum_job_output_name);
                 // TODO escape arguments sent to std::system?
                 std::string command =
                     "SimulatedAnnealing/build/bin/simAnnSingle.out ";
@@ -798,6 +800,7 @@ int main(int argc, char **argv) {
                 auto hq_command = std::string("hq submit --wait ") + command;
 
                 std::system(hq_command.c_str());
+                wait_for_file(quantum_job_output_name);
             } else {
                 // Placeholder until the calling interface will be defined.
                 std::string flag_file_name = quantum_job_output_name + ".flag";
