@@ -293,12 +293,12 @@ double euclidean_distance(const point &a, const point &b) {
 }
 
 /*
-Compute Silhoutte score using Euclidean distance as the distance metric
+Compute Silhouette score using Euclidean distance as the distance metric
 https://en.wikipedia.org/wiki/Silhouette_(clustering)
 */
 double silhouette(std::map<size_t, std::vector<point>> &clusters) {
     if (clusters.empty()) {
-        std::cerr << "Cannot compute Silhoutte score from empty data"
+        std::cerr << "Cannot compute Silhouette score from empty data"
                   << std::endl;
         return -1.0;
     }
@@ -348,14 +348,14 @@ double silhouette(std::map<size_t, std::vector<point>> &clusters) {
 }
 
 /*
-Compute Silhoutte score using Euclidean distance as the distance metric:
+Compute Silhouette score using Euclidean distance as the distance metric:
 https://en.wikipedia.org/wiki/Silhouette_(clustering)
 All points are assumed to be assigned to a cluster.
 */
 double silhouette(const std::vector<point> &pts,
                   const std::vector<int> &labels) {
     if (pts.empty()) {
-        std::cerr << "Cannot compute Silhoutte score from empty data"
+        std::cerr << "Cannot compute Silhouette score from empty data"
                   << std::endl;
         return -1.0;
     }
@@ -471,16 +471,16 @@ int save_clusters(const std::string &filename,
     return EXIT_SUCCESS;
 }
 
-int save_best_solution(double silhoutte_score,
-                       const std::string &silhoutte_name,
+int save_best_solution(double silhouette_score,
+                       const std::string &silhouette_name,
                        const std::map<size_t, std::vector<point>> &clusters,
                        const std::string &clusters_name) {
-    std::ofstream silhoutte_file(silhoutte_name);
-    if (!silhoutte_file) {
-        std::cerr << "Error opening silhoutte file." << std::endl;
+    std::ofstream silhouette_file(silhouette_name);
+    if (!silhouette_file) {
+        std::cerr << "Error opening silhouette file." << std::endl;
         return EXIT_FAILURE;
     }
-    silhoutte_file << silhoutte_score;
+    silhouette_file << silhouette_score;
 
     auto status = save_clusters(clusters_name, clusters);
 
@@ -559,14 +559,19 @@ void restart(const int rank, const std::filesystem::path &folder,
 }
 
 int main(int argc, char **argv) {
-    // TODO make these configurable?
-    std::string best_silhoutte_name = "best_silhoutte.txt";
-    std::string best_clusters_name = "best_cluster.txt";
-
-    std::string quantum_job_output_name = "quantum_job_output.txt";
-    if (argc > 4) {
-        quantum_job_output_name = argv[4];
+    if (argc < 3) {
+        std::cerr << "Please provide all arguments." << std::endl;
+        return EXIT_FAILURE;
     }
+
+    const std::filesystem::path input_points_name = argv[1];
+    const std::filesystem::path work_dir = argv[2];
+
+    auto overlap_matrix_name = work_dir / "overlap_matrix.txt";
+    auto cluster_indices_name = work_dir / "cluster_indices.txt";
+    auto best_silhouette_name = work_dir / "best_silhouette.txt";
+    auto best_clusters_name = work_dir / "best_cluster.txt";
+    auto quantum_job_output_name = work_dir / "quantum_job_output.txt";
 
     int my_rank, num_processes;
 
@@ -591,21 +596,20 @@ int main(int argc, char **argv) {
     
     std::vector<point> pts;
     int num_points;
-    // Always read input file in rank 0
+    // Setup I/O in rank 0
     if (my_rank == 0) {
-        if (argc <= 1) {
-            std::cerr << "No input file was specified." << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-        }
-        std::ifstream file(argv[1]);
+        std::ifstream file(input_points_name);
         if (!file) {
             std::cerr << "Error opening file." << std::endl;
-            ;
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
 
         pts = read_points(file);
         num_points = pts.size();
+
+        if (!std::filesystem::exists(work_dir)) {
+            std::filesystem::create_directory(work_dir);
+        }
     }
 
     int starting_it = 0;
@@ -717,13 +721,13 @@ int main(int argc, char **argv) {
                        MPI_INT, 0, MPI_COMM_WORLD);
 
             if (my_rank == 0) {
-                // TODO remove this loop, only meant for debugging Silhoutte
+                // TODO remove this loop, only meant for debugging Silhouette
                 // score computation
                 for (auto m_id = 0; m_id < num_methods; m_id++) {
                     auto curr_labels = std::vector<int>(
                         all_res.begin() + num_points * m_id,
                         all_res.begin() + num_points * (m_id + 1));
-                    std::cout << "Silhoutte of method " << m_id << ": "
+                    std::cout << "Silhouette of method " << m_id << ": "
                               << silhouette(pts, curr_labels) << std::endl;
                 }
 
@@ -751,27 +755,20 @@ int main(int argc, char **argv) {
                 }
                 auto overlap_matrix = create_overlap_matrix(cluster_elems);
 
-                if (argc < 3) {
-                    std::cout << "Overlap matrix:" << std::endl;
-                    print_matrix(overlap_matrix);
-                } else {
-                    auto status = save_matrix(argv[2], overlap_matrix);
-                    if (status == EXIT_FAILURE) {
-                        std::cerr
-                            << "Unable to write the overlap matrix to file."
-                            << std::endl;
-                        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-                    }
-                    if (argc > 3) {
-                        auto clus_status =
-                            save_indexed_clusters(argv[3], cluster_elems);
-                        if (clus_status == EXIT_FAILURE) {
-                            std::cerr << "Unable to write the obtained "
-                                         "clusters to file."
-                                      << std::endl;
-                            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-                        }
-                    }
+                auto status = save_matrix(overlap_matrix_name, overlap_matrix);
+                if (status == EXIT_FAILURE) {
+                    std::cerr << "Unable to write the overlap matrix to file."
+                              << std::endl;
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+
+                auto clus_status =
+                    save_indexed_clusters(cluster_indices_name, cluster_elems);
+                if (clus_status == EXIT_FAILURE) {
+                    std::cerr << "Unable to write the obtained "
+                                 "clusters to file."
+                              << std::endl;
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
                 }
             }
 
@@ -784,7 +781,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (my_rank == 0 && argc > 3) {
+        if (my_rank == 0) {
             // TODO remove the legacy else block
             auto use_hq = true;
             if (use_hq) {
@@ -793,7 +790,7 @@ int main(int argc, char **argv) {
                 // TODO escape arguments sent to std::system?
                 std::string command =
                     "SimulatedAnnealing/build/bin/simAnnSingle.out ";
-                command += argv[2];
+                command += overlap_matrix_name;
                 command += " ";
                 command += quantum_job_output_name;
                 // Specifying --wait removes the need to parse the given job ID
@@ -803,7 +800,8 @@ int main(int argc, char **argv) {
                 wait_for_file(quantum_job_output_name);
             } else {
                 // Placeholder until the calling interface will be defined.
-                std::string flag_file_name = quantum_job_output_name + ".flag";
+                std::string flag_file_name =
+                    quantum_job_output_name.string() + ".flag";
 
                 if (!std::filesystem::exists(quantum_job_output_name))
                     std::ofstream qjob_output(quantum_job_output_name);
@@ -821,9 +819,9 @@ int main(int argc, char **argv) {
             std::map<size_t, std::vector<point>> current_clusters;
             std::vector<point> outliers;
 
-            auto status = parse_quantum_job_output(argv[1], argv[3],
-                                                   quantum_job_output_name,
-                                                   current_clusters, outliers);
+            auto status = parse_quantum_job_output(
+                input_points_name, cluster_indices_name,
+                quantum_job_output_name, current_clusters, outliers);
 
             if (status == EXIT_FAILURE) {
                 std::cerr << "Something went wrong while reading files."
@@ -834,13 +832,14 @@ int main(int argc, char **argv) {
             // TODO remove outliers management if unnecessary
             // We currently want all points to be assigned to a cluster
             auto outliers_status = assign_outliers(current_clusters, outliers);
-            auto current_silhoutte_score = silhouette(current_clusters);
+            auto current_silhouette_score = silhouette(current_clusters);
 
-            if (!std::filesystem::exists(best_silhoutte_name)) {
-                save_best_solution(current_silhoutte_score, best_silhoutte_name,
-                                   current_clusters, best_clusters_name);
+            if (!std::filesystem::exists(best_silhouette_name)) {
+                save_best_solution(current_silhouette_score,
+                                   best_silhouette_name, current_clusters,
+                                   best_clusters_name);
             } else {
-                std::ifstream best_silhouette_file(best_silhoutte_name);
+                std::ifstream best_silhouette_file(best_silhouette_name);
                 if (!best_silhouette_file) {
                     std::cerr << "Error opening best silhouette file."
                               << std::endl;
@@ -850,11 +849,11 @@ int main(int argc, char **argv) {
                 std::getline(best_silhouette_file, line);
                 std::istringstream ss(line);
 
-                double best_silhoutte_score;
-                ss >> best_silhoutte_score;
-                if (current_silhoutte_score > best_silhoutte_score) {
-                    save_best_solution(current_silhoutte_score,
-                                       best_silhoutte_name, current_clusters,
+                double best_silhouette_score;
+                ss >> best_silhouette_score;
+                if (current_silhouette_score > best_silhouette_score) {
+                    save_best_solution(current_silhouette_score,
+                                       best_silhouette_name, current_clusters,
                                        best_clusters_name);
                 }
             }
@@ -880,7 +879,7 @@ int testing_main() {
         clusters_to_csv(solution_clusters, std::string("mis_output.txt"));
     std::cout << "Selected " << solution_clusters.size() << " clusters"
               << std::endl;
-    std::cout << "Silhoutte score of result: " << silhouette(solution_clusters)
+    std::cout << "Silhouette score of result: " << silhouette(solution_clusters)
               << std::endl;
     std::cout << "Outliers count: " << outliers.size() << std::endl;
     auto outliers_cluster = std::map<size_t, std::vector<point>>();
