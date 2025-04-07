@@ -616,7 +616,7 @@ int main(int argc, char **argv) {
 
     // Edit to something reasonable
     std::filesystem::path example_path = "/path/my_path/";
-    int ideal_processes = 10;
+    int ideal_processes = 3;
     int timeout_s = 5;
 
     DMR_AUTO(dmr_init(argc, argv), void(NULL), restart(my_rank, example_path, starting_it, ready_for_quantum), void(NULL));
@@ -625,7 +625,7 @@ int main(int argc, char **argv) {
     {
         // Edit to your liking
         int nodes_next_expand = 2;
-        int procs_per_node = 5;
+        int procs_per_node = 1;
 
         dmr_set_nodes_next_expand(nodes_next_expand); // Nodes to add in next expand
         dmr_set_ppn_next_expand(procs_per_node); // Processes per node
