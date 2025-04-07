@@ -201,27 +201,6 @@ void initialize()
 
 /* 
 * DMR HINT
-* Code to call to save the current state of the code
-* Can take any number / type of arguments
-*/
-void checkpoint()
-{
-
-}
-
-/* 
-* DMR HINT
-* Code to call to retrieve the state of the code written in the checkpoint
-* Can take any number / type of arguments
-*/
-void restart()
-{
-
-}
-
-
-/* 
-* DMR HINT
 * Resource cleanup code when processes are exiting due to a reconfiguration
 * Can take any number / type of arguments
 */
