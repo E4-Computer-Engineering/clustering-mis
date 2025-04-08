@@ -277,8 +277,9 @@ https://en.wikipedia.org/wiki/Silhouette_(clustering)
 */
 double silhouette(std::map<size_t, std::vector<point>> &clusters) {
     if (clusters.size() < 2) {
-        std::cerr << "Silhouette score is ill-defined when using less than 2 clusters"
-                  << std::endl;
+        std::cerr
+            << "Silhouette score is ill-defined when using less than 2 clusters"
+            << std::endl;
         return -1.0;
     }
 
@@ -776,6 +777,12 @@ int main(int argc, char **argv) {
                 auto hq_command = std::string("hq submit --wait ") + command;
 
                 std::system(hq_command.c_str());
+
+                // Force working directory sync in case of shared filesystem
+                std::system(
+                    (std::string("ls ") + work_dir.string() + " > /dev/null")
+                        .c_str());
+
                 wait_for_file(quantum_job_output_name);
             } else {
                 // Placeholder until the calling interface will be defined.
