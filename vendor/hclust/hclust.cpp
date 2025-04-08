@@ -10,8 +10,8 @@ double distance(const point &a, const point &b) { return std::hypot(a.x - b.x, a
 
 std::vector<double> create_distance_matrix(const point *data, size_t n) {
     std::vector<double> distmat((n * (n - 1)) / 2);
-
-    int k, i, j;
+    size_t k;
+    int i, j;
     for (i = k = 0; i < n; i++) {
         for (j = i + 1; j < n; j++) {
             // compute distance between observables i and j
