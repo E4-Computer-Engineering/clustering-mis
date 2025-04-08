@@ -592,7 +592,7 @@ int main(int argc, char **argv) {
     }
 
     int starting_it = 0;
-    bool ready_for_quantum = false;
+    int ready_for_quantum = false;
 
     // MALL If not first time call restart() and restore application status.
     // starting_it should become the last saved value of current_iteration.
