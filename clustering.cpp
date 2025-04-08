@@ -250,8 +250,8 @@ Compute Silhouette score using Euclidean distance as the distance metric
 https://en.wikipedia.org/wiki/Silhouette_(clustering)
 */
 double silhouette(std::map<size_t, std::vector<point>> &clusters) {
-    if (clusters.empty()) {
-        std::cerr << "Cannot compute Silhouette score from empty data"
+    if (clusters.size() < 2) {
+        std::cerr << "Silhouette score is ill-defined when using less than 2 clusters"
                   << std::endl;
         return -1.0;
     }
