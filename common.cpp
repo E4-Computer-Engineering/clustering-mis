@@ -122,9 +122,10 @@ double euclidean_distance(const point &a, const point &b) {
 }
 
 double silhouette(std::map<size_t, std::vector<point>> &clusters) {
-    if (clusters.empty()) {
-        std::cerr << "Cannot compute Silhoutte score from empty data"
-                  << std::endl;
+    if (clusters.size() < 2) {
+        std::cerr
+            << "Silhouette score is ill-defined when using less than 2 clusters"
+            << std::endl;
         return -1.0;
     }
 
