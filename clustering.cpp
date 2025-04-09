@@ -563,9 +563,13 @@ int main(int argc, char **argv) {
     // MALL If not first time call restart() and restore application status.
     // starting_it should become the last saved value of current_iteration.
 
-    int num_loops = 10; // TODO define a dynamic number of loops?
+    int num_loops = 10;
+    double score_threshold = 0.8;
+    double current_silhouette_score = -1.0;
 
-    for (auto loop_it = starting_it; loop_it < num_loops; loop_it++) {
+    for (auto loop_it = starting_it;
+         current_silhouette_score < score_threshold && loop_it < num_loops;
+         loop_it++) {
         // Rank and size may have changed due to malleability
         MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
         MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -635,13 +639,13 @@ int main(int argc, char **argv) {
             if (my_rank == 0) {
                 // TODO remove this loop, only meant for debugging Silhouette
                 // score computation
-                for (auto m_id = 0; m_id < num_methods; m_id++) {
+                /*for (auto m_id = 0; m_id < num_methods; m_id++) {
                     auto curr_labels = std::vector<int>(
                         all_res.begin() + num_points * m_id,
                         all_res.begin() + num_points * (m_id + 1));
                     std::cout << "Silhouette of method " << m_id << ": "
                               << silhouette(pts, curr_labels) << std::endl;
-                }
+                }*/
 
                 std::cout << "Total number of clusters is " << ncl_tot
                           << std::endl;
@@ -745,7 +749,9 @@ int main(int argc, char **argv) {
             // TODO remove outliers management if unnecessary
             // We currently want all points to be assigned to a cluster
             auto outliers_status = assign_outliers(current_clusters, outliers);
-            auto current_silhouette_score = silhouette(current_clusters);
+            current_silhouette_score = silhouette(current_clusters);
+            std::cout << "Merged score: " << current_silhouette_score
+                      << std::endl;
 
             if (!std::filesystem::exists(best_silhouette_name)) {
                 save_best_solution(current_silhouette_score,
@@ -771,11 +777,12 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        // All ranks need to know if a good enough solution has been found
+        MPI_Bcast(&current_silhouette_score, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         ready_for_quantum = false;
         // MALL request new resources if we need to execute another loop
         // iteration
     }
-
     MPI_Finalize();
     return 0;
 }
