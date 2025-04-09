@@ -18,4 +18,5 @@ clustering:
     path: ../../vendor
 points:
   class: File
-  path: ../../data/input/cluster_points_article.csv
+  path: ../../data/input/cluster_points_80k.csv
+threshold: 0.8
