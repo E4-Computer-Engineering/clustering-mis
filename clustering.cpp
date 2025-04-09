@@ -632,7 +632,7 @@ int main(int argc, char **argv) {
                 int time_start = MPI_Wtime();
                 while(MPI_Wtime() - time_start < timeout_s)
                 {
-                    DMR_AUTO(dmr_check(SHOULD_EXPAND), checkpoint(my_rank, checkpoint_folder, starting_it, ready_for_quantum), (void)NULL, (void)NULL);
+                    DMR_AUTO(dmr_check(SHOULD_EXPAND), checkpoint(my_rank, checkpoint_folder, loop_it, ready_for_quantum), (void)NULL, (void)NULL);
                 }
                 
                 // If we reached this point, we timed out and we will just use the current process count
