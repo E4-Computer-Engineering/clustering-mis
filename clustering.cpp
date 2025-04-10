@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -707,7 +708,15 @@ int main(int argc, char **argv) {
                 // Specifying --wait removes the need to parse the given job ID
                 auto hq_command = std::string("hq submit --wait ") + command;
 
+                auto before_hq = std::chrono::steady_clock::now();
                 std::system(hq_command.c_str());
+                auto after_hq = std::chrono::steady_clock::now();
+                std::cout
+                    << "Total quantum offloading time(ms): "
+                    << std::chrono::duration_cast<std::chrono::milliseconds>(
+                           after_hq - before_hq)
+                           .count()
+                    << std::endl;
 
                 // Force working directory sync in case of shared filesystem
                 std::system(
