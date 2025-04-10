@@ -111,5 +111,5 @@ steps:
         default: 0.0
       silhouette: build-silhouette/output
       threshold:
-        default: 0.5
+        default: 0.8
     out: [output, score]
