@@ -7,6 +7,8 @@ from pathlib import Path
 class Execution:
     node_seconds: float
     timespan: float
+    start_ns: int = 0
+    end_ns: int = 0
 
 
 def process_log(file: Path) -> Execution:
@@ -34,10 +36,15 @@ def process_log(file: Path) -> Execution:
         df_filtered["end_time"].max() - df_filtered["start_time"].min()
     ) / 1000000000
 
-    return Execution(timespan=total_timespan, node_seconds=seconds_node_sum)
+    return Execution(
+        timespan=total_timespan,
+        node_seconds=seconds_node_sum,
+        start_ns=df_filtered["start_time"].min(),
+        end_ns=df_filtered["end_time"].max(),
+    )
 
 
-def aggregate_results(prefix: str):
+def aggregate_results_single_exec(prefix: str):
     result_dir = Path(__file__).parent.parent.resolve() / "perf"
     dirnames = [f"{prefix}{i}" for i in range(1, 6)]
 
@@ -57,9 +64,48 @@ def aggregate_results(prefix: str):
     )
     mean_df.write_csv(result_dir / f"{prefix}_metrics.csv")
 
+
+# FIXME the results here are too big since StreamFlow adds PENDING and RUNNING time together
+# We should instead parse SLURM data
+def aggregate_results_dual_exec(prefix: str):
+    result_dir = Path(__file__).parent.parent.resolve() / "perf"
+    dirnames = [(f"{prefix}{i}_1", f"{prefix}{i}_2") for i in range(1, 6)]
+
+    executions = []
+    for first, second in dirnames:
+        file1 = result_dir / first / "report.csv"
+        execution1 = process_log(file=file1)
+        file2 = result_dir / second / "report.csv"
+        execution2 = process_log(file=file2)
+        tot = Execution(
+            node_seconds=execution1.node_seconds + execution2.node_seconds,
+            timespan=(
+                max(execution1.end_ns, execution2.end_ns)
+                - min(execution1.start_ns, execution2.start_ns)
+            )
+            / 1000000000,
+        )
+
+        executions.append(tot)
+
+    df = pl.DataFrame(executions)
+
+    mean_df = df.select(
+        pl.col("node_seconds").mean(),
+        pl.col("node_seconds").std().alias("node_seconds_std"),
+        pl.col("timespan").mean(),
+        pl.col("timespan").std().alias("timespan_std"),
+    )
+    mean_df.write_csv(result_dir / f"{prefix}_metrics.csv")
+
+
 def main():
-    aggregate_results("workflow")
-    aggregate_results("workflow_sleep")
+    aggregate_results_single_exec("workflow")
+    aggregate_results_single_exec("workflow_sleep")
+
+    aggregate_results_dual_exec("workflow_duo")
+    aggregate_results_dual_exec("workflow_sleep_duo")
+
 
 
 if __name__ == "__main__":
