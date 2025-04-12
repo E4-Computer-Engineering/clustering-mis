@@ -20,3 +20,12 @@ points:
   class: File
   path: ../../data/input/cluster_points_80k.csv
 threshold: 0.8
+annealing_bin:
+  class: File
+  path: ../../SimulatedAnnealing/build/bin/simAnnSingle.out
+clustering_bin:
+  class: File
+  path: ../../build/bin/clustering
+silhouette_bin:
+  class: File
+  path: ../../build/bin/silhouette
