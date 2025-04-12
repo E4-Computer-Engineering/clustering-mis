@@ -37,9 +37,9 @@ def process_log(file: Path) -> Execution:
     return Execution(timespan=total_timespan, node_seconds=seconds_node_sum)
 
 
-def main():
+def aggregate_results(prefix: str):
     result_dir = Path(__file__).parent.parent.resolve() / "perf"
-    dirnames = [f"workflow{i}" for i in range(1, 6)]
+    dirnames = [f"{prefix}{i}" for i in range(1, 6)]
 
     executions = []
     for name in dirnames:
@@ -55,7 +55,11 @@ def main():
         pl.col("timespan").mean(),
         pl.col("timespan").std().alias("timespan_std"),
     )
-    mean_df.write_csv(result_dir / "workflow_metrics.csv")
+    mean_df.write_csv(result_dir / f"{prefix}_metrics.csv")
+
+def main():
+    aggregate_results("workflow")
+    aggregate_results("workflow_sleep")
 
 
 if __name__ == "__main__":
