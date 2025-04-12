@@ -27,7 +27,7 @@ def process_log(file: Path) -> Execution:
     return Execution(timespan=time_seconds, node_seconds=3 * time_seconds)
 
 
-def aggregate_results(prefix: str):
+def aggregate_results_single_exec(prefix: str):
     result_dir = Path(__file__).parent.parent.resolve() / "perf"
     dirnames = [f"{prefix}{i}" for i in range(1, 6)]
 
@@ -48,9 +48,39 @@ def aggregate_results(prefix: str):
     mean_df.write_csv(result_dir / f"{prefix}_metrics.csv")
 
 
+def aggregate_results_dual_exec(prefix: str):
+    result_dir = Path(__file__).parent.parent.resolve() / "perf"
+    dirnames = [(f"{prefix}{i}_1", f"{prefix}{i}_2") for i in range(1, 6)]
+
+    executions = []
+    for first, second in dirnames:
+        file1 = result_dir / first / "log.txt"
+        execution1 = process_log(file=file1)
+        file2 = result_dir / second / "log.txt"
+        execution2 = process_log(file=file2)
+        tot = Execution(
+            node_seconds=execution1.node_seconds + execution2.node_seconds,
+            timespan=execution1.timespan + execution2.timespan,
+        )
+
+        executions.append(tot)
+
+    df = pl.DataFrame(executions)
+
+    mean_df = df.select(
+        pl.col("node_seconds").mean(),
+        pl.col("node_seconds").std().alias("node_seconds_std"),
+        pl.col("timespan").mean(),
+        pl.col("timespan").std().alias("timespan_std"),
+    )
+    mean_df.write_csv(result_dir / f"{prefix}_metrics.csv")
+
+
 def main():
-    aggregate_results("baseline")
-    aggregate_results("baseline_sleep")
+    aggregate_results_single_exec("baseline")
+    aggregate_results_single_exec("baseline_sleep")
+
+    aggregate_results_dual_exec("baseline_sleep_duo")
 
 
 if __name__ == "__main__":
