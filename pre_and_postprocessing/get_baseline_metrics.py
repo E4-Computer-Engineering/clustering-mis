@@ -80,6 +80,7 @@ def main():
     aggregate_results_single_exec("baseline")
     aggregate_results_single_exec("baseline_sleep")
 
+    aggregate_results_dual_exec("baseline_duo")
     aggregate_results_dual_exec("baseline_sleep_duo")
 
 
