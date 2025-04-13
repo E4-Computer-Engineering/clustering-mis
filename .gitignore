@@ -55,3 +55,14 @@ Thumbs.db
 
 # Build directory
 build/
+
+# Virtual Python environment
+.venv/
+
+# Miscellaneous cache
+.cache/
+
+# StreamFlow
+.streamflow
+report.html
+output.txt
