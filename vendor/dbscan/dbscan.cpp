@@ -8,6 +8,7 @@
 #include <nanoflann/nanoflann.hpp>
 
 #include <ostream>
+#include <random>
 #include <type_traits>
 #include <vector>
 
@@ -135,30 +136,39 @@ auto dbscan(const std::span<const point3>& data, float eps, int min_pts) -> std:
 }
 
 // TODO move to another file, use a shared interface for both k-means and DBSCAN
-int dbscan(int myrank, const char *str, const point *pts, int np, int *res) {
-    std::cout << "Hi from rank " << myrank << std::endl;
-
-    // The following lines convert the input data from a C style array of point to a std::vector<point2>
+int dbscan(int myrank, const char *str, const point *pts, int np, int *res,
+           int seed) {
+    // The following lines convert the input data from a C style array of point
+    // to a std::vector<point2>
     std::vector<point> pts_vec(pts, pts + np);
     std::vector<point2> pts2_vec(np);
 
-    std::transform(pts_vec.begin(), pts_vec.end(), pts2_vec.begin(), 
-               [](const point& p) { return point2{static_cast<float>(p.x), static_cast<float>(p.y)}; });
-    
+    std::transform(
+        pts_vec.begin(), pts_vec.end(), pts2_vec.begin(), [](const point &p) {
+            return point2{static_cast<float>(p.x), static_cast<float>(p.y)};
+        });
+
+    static std::default_random_engine eng;
+    eng.seed(seed + 0xE4 * 1);
+    static std::uniform_real_distribution<> dis(0, 1); // range [0, 1)
+    auto min_eps = 1.2;
+    auto max_eps = 4.5;
+    auto eps = min_eps + (max_eps-min_eps) * dis(eng);
+
     // TODO find reasonable eps and min_pts
-    auto dbscan_res = dbscan(pts2_vec, 1.5, 10);
+    auto dbscan_res = dbscan(pts2_vec, eps, 10);
 
     if (dbscan_res.size() == 0) {
-        std::cerr << "No cluster could be found with the given parameters. Increase eps or decrease min_pts" << std::endl;
+        std::cerr << "No cluster could be found with the given parameters. "
+                     "Increase eps or decrease min_pts"
+                  << std::endl;
         return EXIT_FAILURE;
     }
 
     // Unassigned points are put in the 0-th cluster
-    std::fill(res, res+np, 0);
-    for(size_t i = 0; i < dbscan_res.size(); i++)
-    {
-        for(auto p: dbscan_res[i])
-        {
+    std::fill(res, res + np, 0);
+    for (size_t i = 0; i < dbscan_res.size(); i++) {
+        for (auto p : dbscan_res[i]) {
             res[p] = i + 1;
         }
     }
@@ -169,7 +179,8 @@ int dbscan(int myrank, const char *str, const point *pts, int np, int *res) {
         std::ofstream out_file("dbscan_output.txt");
         out_file << "Feature 1\tFeature 2\tCluster" << std::endl;
         for (size_t i = 0; i < np; i++) {
-            out_file << pts[i].x << "\t" << pts[i].y << "\t" << res[i] << std::endl;
+            out_file << pts[i].x << "\t" << pts[i].y << "\t" << res[i]
+                     << std::endl;
         }
         out_file.close();
     }

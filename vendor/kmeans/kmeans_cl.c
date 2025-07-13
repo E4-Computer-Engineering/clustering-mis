@@ -15,7 +15,7 @@
 #include <string.h>
 
 #include "kmeans_cl.h"
-#include "points.h"
+#include "common.h"
 
 #ifdef KMEANS_THREADED
 #include <pthread.h>
@@ -274,7 +274,7 @@ kmeans_cl(kmeans_config *config)
 	 * Previous cluster state array. At this time, r doesn't mean anything
 	 * but it's ok
 	 */
-	clusters_last = kmeans_malloc(clusters_sz);
+	clusters_last = (int *) kmeans_malloc(clusters_sz);
 
 	while (1)
 	{

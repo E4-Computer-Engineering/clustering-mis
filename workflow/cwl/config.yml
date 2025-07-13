@@ -1,0 +1,31 @@
+annealing:
+  - class: File
+    path: ../../SimulatedAnnealing/Makefile
+  - class: Directory
+    path: ../../SimulatedAnnealing/src
+clustering:
+  - class: File
+    path: ../../Makefile
+  - class: File
+    path: ../../clustering.cpp
+  - class: File
+    path: ../../common.cpp
+  - class: File
+    path: ../../silhouette.cpp
+  - class: Directory
+    path: ../../include
+  - class: Directory
+    path: ../../vendor
+points:
+  class: File
+  path: ../../data/input/cluster_points_80k.csv
+threshold: 0.8
+annealing_bin:
+  class: File
+  path: ../../SimulatedAnnealing/build/bin/simAnnSingle.out
+clustering_bin:
+  class: File
+  path: ../../build/bin/clustering
+silhouette_bin:
+  class: File
+  path: ../../build/bin/silhouette

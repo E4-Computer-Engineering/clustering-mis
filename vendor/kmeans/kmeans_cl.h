@@ -9,7 +9,7 @@
 
 
 #include <stdlib.h>
-#include "points.h"
+#include "common.h"
 
 /*
 * Simple k-means implementation for arbitrary data structures

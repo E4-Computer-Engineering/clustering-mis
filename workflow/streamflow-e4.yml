@@ -1,0 +1,66 @@
+version: v1.0
+workflows:
+  smart-hpc-qc:
+    type: cwl
+    config:
+      file: cwl/main.cwl
+      settings: cwl/config.yml
+    bindings:
+      - step: /build-annealing
+        target:
+          deployment: e4
+          service: quantum
+      - step: /build-clustering
+        target:
+          deployment: e4
+          service: computeSlim
+      - step: /build-silhouette
+        target:
+          deployment: e4
+          service: computeSlim
+      - step: /loop/clustering
+        target:
+          deployment: e4
+          service: compute
+      - step: /loop/annealing
+        target:
+          deployment: e4
+          service: quantum
+      - step: /loop/silhouette
+        target:
+          deployment: e4
+          service: computeSlim
+database:
+  type: sqlite
+  config:
+    connection: .streamflow/sqlite.db
+deployments:
+  e4-ssh:
+    type: ssh
+    config:
+      nodes:
+        - hostname: 172.18.16.120
+          checkHostKey: false
+          passwordFile: </path/to/password/file>
+          username: <username>
+    workdir: </path/to/shared/workdir>
+  e4:
+    type: slurm
+    config:
+      maxConcurrentJobs: 3
+      pollingInterval: 1
+      services:
+        quantum:
+          partition: quantum
+        compute:
+          file: slurm/e4.sh
+          partition: compute
+          ntasks: 3
+          ntasksPerNode: 1
+        computeSlim:
+          file: slurm/e4.sh
+          partition: compute
+          ntasks: 1
+          ntasksPerNode: 1
+    wraps: e4-ssh
+    

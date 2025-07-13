@@ -1,0 +1,63 @@
+version: v1.0
+workflows:
+  smart-hpc-qc:
+    type: cwl
+    config:
+      file: cwl/main.cwl
+      settings: cwl/config.yml
+    bindings:
+      - step: /build-annealing
+        target:
+          deployment: leonardo
+          service: booster
+      - step: /build-clustering
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /build-silhouette
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /loop/clustering
+        target:
+          deployment: leonardo
+          service: dcgp
+      - step: /loop/annealing
+        target:
+          deployment: leonardo
+          service: booster
+      - step: /loop/silhouette
+        target:
+          deployment: leonardo
+          service: dcgp
+database:
+  type: sqlite
+  config:
+    connection: .streamflow/sqlite.db
+deployments:
+  leonardo-ssh:
+    type: ssh
+    config:
+      nodes:
+        - hostname: login.leonardo.cineca.it
+          checkHostKey: false
+          sshKey: </path/to/ssh/key>
+          username: <username>
+    workdir: </path/to/shared/workdir>
+  leonardo:
+    type: slurm
+    config:
+      maxConcurrentJobs: 3
+      services:
+        booster:
+          account: IscrC_SHPC-QC
+          file: slurm/leonardo.sh
+          partition: boost_usr_prod
+        dcgp:
+          account: IscrC_SHPC-QC_0
+          file: slurm/leonardo.sh
+          gres: tmpfs:1g
+          partition: dcgp_usr_prod
+          ntasks: 3
+    wraps: leonardo-ssh
+    

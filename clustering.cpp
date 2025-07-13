@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include <mpi.h>
 #include <numeric>
 #include <ostream>
@@ -7,13 +8,15 @@
 #include <span>
 #include <stdlib.h>
 
-#include "points.h"
+#include "common.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
+
+using ClusFuncType =
+    std::function<int(int, const char *, const point *, int, int *, int)>;
 
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
@@ -30,13 +33,23 @@ bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
     return false;
 }
 
-std::vector<std::vector<int>>
+std::vector<std::vector<double>>
 create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
+    // We want to give a different weight to each diagonal term. Otherwise, if
+    // all clusters are considered equally good, the annealer will choose a
+    // solution with many small clusters.
+    std::vector<size_t> sizes(clusters.size());
+    std::transform(clusters.begin(), clusters.end(), sizes.begin(),
+                   [](const auto &cl) { return cl.size(); });
+    // The biggest cluster will have a weight of 1. The others will be
+    // normalized to be smaller, but in the range 0 < x < 1.
+    auto max_size = *std::max_element(sizes.begin(), sizes.end());
+
     auto n = clusters.size();
     auto penalty = n;
 
     // Initialize empty matrix
-    std::vector<std::vector<int>> res(n, std::vector<int>(n, 0));
+    std::vector<std::vector<double>> res(n, std::vector<double>(n, 0.0));
 
     // Add penalty to overlapping clusters
     for (auto i = 0; i < n - 1; i++) {
@@ -49,13 +62,13 @@ create_overlap_matrix(const std::vector<std::set<int>> &clusters) {
 
     // Set diagonal terms
     for (auto i = 0; i < n; i++) {
-        res[i][i] = -1;
+        res[i][i] = -(double)sizes[i] / max_size;
     }
     return res;
 }
 
 void write_matrix(std::ostream &out_stream,
-                  const std::vector<std::vector<int>> &m) {
+                  const std::vector<std::vector<double>> &m) {
     for (auto i : m) {
         for (auto j = i.begin(); j != i.end(); j++) {
             if (j != i.begin()) {
@@ -67,12 +80,12 @@ void write_matrix(std::ostream &out_stream,
     }
 }
 
-void print_matrix(const std::vector<std::vector<int>> &m) {
+void print_matrix(const std::vector<std::vector<double>> &m) {
     write_matrix(std::cout, m);
 }
 
 int save_matrix(const std::string &file_name,
-                const std::vector<std::vector<int>> &m) {
+                const std::vector<std::vector<double>> &m) {
     std::ofstream file(file_name);
     if (!file) {
         std::cerr << "Error opening file." << std::endl;
@@ -103,29 +116,12 @@ int save_clusters(const std::string &file_name,
     }
 }
 
-void read_points(std::istream &file, std::vector<point> &points) {
-    std::string line;
-    std::getline(file, line); // Skip first line
-
-    while (std::getline(file, line)) {
-        std::istringstream ss(line);
-        point p;
-        char comma;
-
-        // Read x and y, assuming CSV format
-        if (ss >> p.x >> comma >> p.y) {
-            points.emplace_back(p);
-        }
-    }
-}
-
 // Return total number of clusters identified by each algorithm
 int run_clustering_algorithms(int my_rank, int num_methods_proc,
                               const std::vector<point> &pts, int num_methods,
                               const std::vector<std::string> &methods,
-                              int (*functions[])(int, const char *,
-                                                 const point *, int, int *),
-                              std::vector<int> &assigned_clusters) {
+                              std::vector<ClusFuncType> &functions,
+                              std::vector<int> &assigned_clusters, int seed) {
     auto num_points = pts.size();
 
     // Each process can run more than one clustering algorithm.
@@ -149,7 +145,7 @@ int run_clustering_algorithms(int my_rank, int num_methods_proc,
 
         auto res = functions[global_method_idx](
             my_rank, current_method_name.c_str(), pts.data(), num_points,
-            assigned_clusters.data() + local_method_idx * num_points);
+            assigned_clusters.data() + local_method_idx * num_points, seed);
 
         auto begin = assigned_clusters.begin() + local_method_idx * num_points;
         auto end = begin + num_points;
@@ -175,10 +171,8 @@ int main(int argc, char **argv) {
     int my_rank, num_processes;
 
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
+    std::vector<ClusFuncType> functions = {kmeans, dbscan, hclust};
     int num_methods = methods.size();
-
-    int (*functions[])(int, const char *, const point *, int,
-                       int *) = {kmeans, dbscan, hclust};
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
@@ -202,7 +196,7 @@ int main(int argc, char **argv) {
             MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
         }
 
-        read_points(file, pts);
+        pts = read_points(file);
         num_points = pts.size();
     }
 
@@ -219,11 +213,13 @@ int main(int argc, char **argv) {
     auto num_methods_proc =
         std::ceil((float)num_methods / (float)num_processes);
 
+    int seed = argc > 4 ? std::stoi(argv[4]) : 0;
+
     // Run the algorithms assigned to this process and flatten their results
     std::vector<int> assigned_clusters(num_methods_proc * num_points, 0);
     int ncl =
         run_clustering_algorithms(my_rank, num_methods_proc, pts, num_methods,
-                                  methods, functions, assigned_clusters);
+                                  methods, functions, assigned_clusters, seed);
 
     std::vector<int> all_res;        // Aggregation of all clustering results
                                      // across all processes
