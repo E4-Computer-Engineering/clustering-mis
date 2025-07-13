@@ -200,8 +200,14 @@ class WorkflowProvider(UsageTimelineProvider):
                 start_ts = datetime.fromisoformat(start).timestamp()
                 end_ts = datetime.fromisoformat(end).timestamp()
                 tres_fields = dict(re.findall(r"(\w+)=(\w+)", tres))
-                if name == "clustering" or name == "silhouette":
+                if name == "clustering": # or name == "silhouette":
+                    # FIXME workflow should be rerun using the computeSlim
+                    # service instead of the compute one to obtain more
+                    # reliable results. Current data suggest that the job
+                    # duration would not change, but it should be verified.
                     coeff = int(tres_fields["cpu"])
+                elif name == "silhouette":
+                    coeff = 1
                 else:
                     coeff = 0
 
@@ -234,6 +240,7 @@ def stacked_step_area(ax, x: list[float], ys: list[list[int]]):
             [0, *offsets, 0],
             step="post",
             alpha=1.0,
+            label=f"Job {idx+1}"
         )
         offsets += y
 
@@ -256,8 +263,8 @@ def main():
     # TODO workflow slurm logs report 3 cpus used even during silhouette
     workflow = WorkflowProvider(
         [
-            current_dir.parent / "perf" / "workflow_sleep_duo1_1" / "log.txt",
             current_dir.parent / "perf" / "workflow_sleep_duo1_2" / "log.txt",
+            current_dir.parent / "perf" / "workflow_sleep_duo1_1" / "log.txt",
         ],
         jc_df=jc_df,
     )
@@ -273,6 +280,7 @@ def main():
 
     axs[2].title.set_text("Malleability compute nodes usage")
     stacked_step_area(axs[2], *mall.get_unified_timelines())
+    axs[2].legend()
 
     axs[0].set_yticks(np.arange(0, 3 + 1, 1))
     axs[1].set_yticks(np.arange(0, 3 + 1, 1))
