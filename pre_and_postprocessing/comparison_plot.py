@@ -240,7 +240,7 @@ def stacked_step_area(ax, x: list[float], ys: list[list[int]]):
             [0, *offsets, 0],
             step="post",
             alpha=1.0,
-            label=f"Job {idx+1}"
+            label=f"Workload {idx+1}"
         )
         offsets += y
 
@@ -286,7 +286,7 @@ def main():
     axs[1].set_yticks(np.arange(0, 3 + 1, 1))
     axs[2].set_yticks(np.arange(0, 3 + 1, 1))
 
-    fig.supxlabel("Time since earliest job start (s)")
+    fig.supxlabel("Time since earliest workload start (s)")
     fig.supylabel("Number of allocated compute nodes")
 
     fig.tight_layout()
