@@ -13,11 +13,11 @@ workflows:
       - step: /build-clustering
         target:
           deployment: e4
-          service: compute
+          service: computeSlim
       - step: /build-silhouette
         target:
           deployment: e4
-          service: compute
+          service: computeSlim
       - step: /loop/clustering
         target:
           deployment: e4
@@ -29,7 +29,7 @@ workflows:
       - step: /loop/silhouette
         target:
           deployment: e4
-          service: compute
+          service: computeSlim
 database:
   type: sqlite
   config:
@@ -56,5 +56,11 @@ deployments:
           file: slurm/e4.sh
           partition: compute
           ntasks: 3
+          ntasksPerNode: 1
+        computeSlim:
+          file: slurm/e4.sh
+          partition: compute
+          ntasks: 1
+          ntasksPerNode: 1
     wraps: e4-ssh
     
