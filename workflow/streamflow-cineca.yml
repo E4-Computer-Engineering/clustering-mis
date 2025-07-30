@@ -1,4 +1,4 @@
-version: v1.0
+version: v1.1
 workflows:
   smart-hpc-qc:
     type: cwl
@@ -13,11 +13,11 @@ workflows:
       - step: /build-clustering
         target:
           deployment: leonardo
-          service: dcgp
+          service: dcgpSlim
       - step: /build-silhouette
         target:
           deployment: leonardo
-          service: dcgp
+          service: dcgpSlim
       - step: /loop/clustering
         target:
           deployment: leonardo
@@ -29,7 +29,7 @@ workflows:
       - step: /loop/silhouette
         target:
           deployment: leonardo
-          service: dcgp
+          service: dcgpSlim
 database:
   type: sqlite
   config:
@@ -48,6 +48,7 @@ deployments:
     type: slurm
     config:
       maxConcurrentJobs: 3
+      pollingInterval: 1
       services:
         booster:
           account: IscrC_SHPC-QC
@@ -59,5 +60,13 @@ deployments:
           gres: tmpfs:1g
           partition: dcgp_usr_prod
           ntasks: 3
+          ntasksPerNode: 1
+        dcgpSlim:
+          account: IscrC_SHPC-QC_0
+          file: slurm/leonardo.sh
+          gres: tmpfs:1g
+          partition: dcgp_usr_prod
+          ntasks: 1
+          ntasksPerNode: 1
     wraps: leonardo-ssh
     
