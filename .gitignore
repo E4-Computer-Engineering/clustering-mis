@@ -66,3 +66,6 @@ build/
 .streamflow
 report.html
 output.txt
+
+# Custom environment variables
+**/.env
