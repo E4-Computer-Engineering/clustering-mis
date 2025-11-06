@@ -530,8 +530,8 @@ int main(int argc, char **argv) {
 
     int my_rank, num_processes;
 
-    std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
-    std::vector<ClusFuncType> functions = {kmeans, dbscan, hclust};
+    std::vector<std::string> methods = {"kmeans", "hclust"};
+    std::vector<ClusFuncType> functions = {kmeans, hclust};
     int num_methods = methods.size();
 
     MPI_Init(&argc, &argv);

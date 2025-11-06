@@ -60,8 +60,8 @@ int kmeans(int myrank, const char *str, const point *pts, int n, int *res,
 
     srand(seed + 0xE4 * 0);
 
-    int min_k = 4;
-    int max_k = 10;
+    int min_k = 2;
+    int max_k = 2;
     int k = min_k + rand() / (RAND_MAX / (max_k - min_k + 1) + 1);
 
     /* Constants */

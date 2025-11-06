@@ -27,8 +27,8 @@ std::vector<double> create_distance_matrix(const point *data, size_t n) {
 int hclust(int myrank, const char *str, const point *pts, int np, int *res, int seed) {
     static std::default_random_engine eng;
     eng.seed(seed + 0xE4 * 2);
-    auto min_k = 4;
-    auto max_k = 10;
+    auto min_k = 2;
+    auto max_k = 2;
     static std::uniform_int_distribution<> dis(min_k, max_k); // range [min_k, max_k]
     size_t NUM_CLUSTERS = dis(eng);
 
