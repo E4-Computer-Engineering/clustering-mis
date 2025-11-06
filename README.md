@@ -7,7 +7,7 @@ Make sure to have a working MPI installation available. Its include path should 
 
 The code can be compiled using `make`. The newly built executable will be under the build/bin directory.
 
-Beware that for the quantum emulation system to work you will also need to pull the `SimulatedAnnealing` submodule, enter its directory and run the `make` command.
+The quantum offload system to Quandela resources is implemented in Python. You will need to have a proper Python environment loaded, see the [requirements.txt](quandela_interface/requirements.txt) file.
 HyperQueue is also required. If you are testing the application on qluster, open two terminals inside asvsys02, load the HyperQueue module and run these commands respectively:
 1) `hq server start`
 2) `hq alloc add slurm --time-limit 01:00:00 --workers-per-alloc 1 --max-worker-count 1 --idle-timeout 30s -- --partition=quantum`
