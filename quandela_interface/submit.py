@@ -7,7 +7,7 @@ import time
 
 
 # TODO can we use floats?
-def submit(token: str, QUBOmatrix: list[list[int]]) -> dict[str, str]:
+def submit(token: str, QUBOmatrix: list[list[float]]) -> dict[str, str]:
     url = "https://api.cloud.quandela.com/qt/cvarvqe"
 
     payload = {
@@ -42,12 +42,12 @@ def check_status(token: str, job_id: str) -> dict[str, Any]:
     return requests.get(url, headers=headers).json()
 
 
-def read_qubo(file: str) -> list[list[int]]:
+def read_qubo(file: str) -> list[list[float]]:
     res = []
 
     with open(file, "r") as f:
         for line in f:
-            row = [int(x) for x in line.split()]
+            row = [float(x) for x in line.split()]
             res.append(row)
 
     assert(len(res) == len(res[0]))
@@ -59,7 +59,7 @@ def write_results(file: str, results_dict: dict[str, Any]):
     bitstring = results_dict["bitstring"]
     loss = results_dict["loss"]
 
-    with open(sys.argv[2], "w") as f:
+    with open(file, "w") as f:
         f.write(",".join(bitstring))
         f.write(f"\n{loss}\n")
 
