@@ -694,53 +694,35 @@ int main(int argc, char **argv) {
         }
 
         if (my_rank == 0) {
-            // TODO remove the legacy else block
-            auto use_hq = true;
-            if (use_hq) {
-                // Remove last output (NFS might provide stale files?)
-                std::filesystem::remove(quantum_job_output_name);
-                // TODO escape arguments sent to std::system?
-                std::string command =
-                    "SimulatedAnnealing/build/bin/simAnnSingle.out ";
-                command += overlap_matrix_name;
-                command += " ";
-                command += quantum_job_output_name;
-                // Specifying --wait removes the need to parse the given job ID
-                auto hq_command = std::string("hq submit --wait ") + command;
+            auto use_hq = false;
 
-                auto before_hq = std::chrono::steady_clock::now();
-                std::system(hq_command.c_str());
-                auto after_hq = std::chrono::steady_clock::now();
-                std::cout
-                    << "Total quantum offloading time(ms): "
-                    << std::chrono::duration_cast<std::chrono::milliseconds>(
-                           after_hq - before_hq)
-                           .count()
-                    << std::endl;
+            // Remove last output (NFS might provide stale files?)
+            std::filesystem::remove(quantum_job_output_name);
+            // TODO escape arguments sent to std::system?
+            std::string command = "python quandela_interface/submit.py ";
+            command += overlap_matrix_name;
+            command += " ";
+            command += quantum_job_output_name;
 
-                // Force working directory sync in case of shared filesystem
-                std::system(
-                    (std::string("ls ") + work_dir.string() + " > /dev/null")
-                        .c_str());
+            // Specifying --wait removes the need to parse the given job ID
+            const auto submit_cmd =
+                use_hq ? std::string("hq submit --wait ") + command : command;
 
-                wait_for_file(quantum_job_output_name);
-            } else {
-                // Placeholder until the calling interface will be defined.
-                std::string flag_file_name =
-                    quantum_job_output_name.string() + ".flag";
+            auto before_submit = std::chrono::steady_clock::now();
+            std::system(submit_cmd.c_str());
+            auto after_submit = std::chrono::steady_clock::now();
+            std::cout << "Total quantum offloading time(ms): "
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(
+                             after_submit - before_submit)
+                             .count()
+                      << std::endl;
 
-                if (!std::filesystem::exists(quantum_job_output_name))
-                    std::ofstream qjob_output(quantum_job_output_name);
+            // Force working directory sync in case of shared filesystem
+            std::system(
+                (std::string("ls ") + work_dir.string() + " > /dev/null")
+                    .c_str());
 
-                std::ofstream qjob_output_flag(flag_file_name);
-                qjob_output_flag.close();
-
-                // We expect to have the output available if the flag is
-                // detected
-                wait_for_file(flag_file_name);
-                // The flag can be removed after being detected
-                std::filesystem::remove(flag_file_name);
-            }
+            wait_for_file(quantum_job_output_name);
 
             std::map<size_t, std::vector<point>> current_clusters;
             std::vector<point> outliers;
