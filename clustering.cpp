@@ -6,7 +6,7 @@
 #include <functional>
 #include <istream>
 #include <map>
-#include <mpi.h>
+//#include <mpi.h>
 #include <numeric>
 #include <ostream>
 #include <set>
@@ -23,9 +23,61 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+#include <chrono>
 
 using ClusFuncType =
     std::function<int(int, const char *, const point *, int, int *, int)>;
+
+// Flexmpi - Allocated nodes
+int alloc_nodes = 0;
+
+/**
+ * This call wraps the functions needed to execute syncrhonous allocs.
+ * Comment: Currently, Flexmpi do not support sync. allocs, so we can simulate doing this. 
+ * Update: we could implement sync. allocs in our framework if needed. We know how to do it. However, we are
+ * developing another algorithm and this change is not a priority at the moment.
+ */
+void ADM_Malleability_sync_(int* procs_hint, int* excl_nodes_hint, int* world_size, int *world_rank, int* last_world_size, int* status){
+    ADM_RegisterSysAttributesInt ("ADM_GLOBAL_HINT_NUM_PROCESS", procs_hint);
+    ADM_RegisterSysAttributesInt ("ADM_GLOBAL_HINT_EXCL_NODES", excl_nodes_hint);
+    int prev_size = *world_size;
+    time_t start_time = time(NULL);
+    time_t current_time = time(NULL);
+    while(prev_size == (*world_size)){
+        ADM_MalleableRegion (ADM_SERVICE_START);
+	    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        *status = ADM_MalleableRegion (ADM_SERVICE_STOP);
+        current_time = time(NULL);
+        // Timeout check - Only for expansion
+        if(difftime(current_time, start_time) > 5 && alloc_nodes > 0){ //timeout after 5s
+            std::cout << "ADM_Malleability_sync_: Timeout reached while waiting for malleability operation to complete.\n";
+            //To remove alloc from IC
+            MPI_Barrier(ADM_COMM_WORLD);
+            int red = 0 - (*procs_hint);
+            ADM_RegisterSysAttributesInt ("ADM_GLOBAL_HINT_NUM_PROCESS", &red);
+            ADM_RegisterSysAttributesInt ("ADM_GLOBAL_HINT_EXCL_NODES", excl_nodes_hint);
+            ADM_MalleableRegion (ADM_SERVICE_START);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            *status = ADM_MalleableRegion (ADM_SERVICE_STOP);
+            if(*status == ADM_ACTIVE){
+                MPI_Comm_rank(ADM_COMM_WORLD, world_rank);
+                MPI_Comm_size(ADM_COMM_WORLD, world_size);
+            } else {break;}
+            break;
+        }
+        
+        if(*status == ADM_ACTIVE){
+            MPI_Comm_rank(ADM_COMM_WORLD, world_rank);
+            MPI_Comm_size(ADM_COMM_WORLD, world_size);
+        } else {break;}
+    }
+    if (last_world_size != NULL)
+        *last_world_size = *world_size;
+
+    current_time = time(NULL);
+    std::cout << "ADM_Malleability_sync done in " << difftime(current_time, start_time) << " seconds. New size: " << *world_size << "\n";
+}
+
 
 // Short-circuited sets intersection
 bool have_shared_elem(const std::set<int> &x, const std::set<int> &y) {
@@ -514,6 +566,19 @@ void restart(const int rank, const std::filesystem::path &folder,
 }
 
 int main(int argc, char **argv) {
+    
+    //Flexmpi - Get jobid to build the name of the expanded jobs
+    const char * jobid_env = getenv("SLURM_JOB_ID");
+    std::string jobname_expanded = "";
+    if (jobid_env != NULL) {    
+        char jobname[32];
+        snprintf(jobname, sizeof(jobname), "XPN%s", jobid_env);
+        jobname_expanded = std::string(jobname);
+    }
+
+    // Initial time
+    auto inittime = std::chrono::high_resolution_clock::now();
+
     if (argc < 3) {
         std::cerr << "Please provide all arguments." << std::endl;
         return EXIT_FAILURE;
@@ -530,6 +595,10 @@ int main(int argc, char **argv) {
 
     int my_rank, num_processes;
 
+    //mpi size
+    int my_size;
+    int first_it_spawned = 0;
+
     std::vector<std::string> methods = {"kmeans", "dbscan", "hclust"};
     std::vector<ClusFuncType> functions = {kmeans, dbscan, hclust};
     int num_methods = methods.size();
@@ -539,7 +608,10 @@ int main(int argc, char **argv) {
     MPI_Datatype MPI_POINT;
     create_mpi_point_type(&MPI_POINT);
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    MPI_Comm_rank(ADM_COMM_WORLD, &my_rank);
+    //Flexmpi - get mpi size
+    MPI_Comm_size(ADM_COMM_WORLD, &my_size);
+
     std::vector<point> pts;
     int num_points;
     // Setup I/O in rank 0
@@ -547,7 +619,7 @@ int main(int argc, char **argv) {
         std::ifstream file(input_points_name);
         if (!file) {
             std::cerr << "Error opening file." << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+            MPI_Abort(ADM_COMM_WORLD, EXIT_FAILURE);
         }
 
         pts = read_points(file);
@@ -561,29 +633,85 @@ int main(int argc, char **argv) {
     int starting_it = 0;
     bool ready_for_quantum = false;
 
-    // MALL If not first time call restart() and restore application status.
-    // starting_it should become the last saved value of current_iteration.
-
-    int num_loops = 10;
+    int num_loops = 11; // 10;
     double score_threshold = 0.8;
     double current_silhouette_score = -1.0;
+
+
+    //Flexmpi - Detecting if a process is native or spawned
+    int proctype;
+    ADM_GetSysAttributesInt ("ADM_GLOBAL_PROCESS_TYPE", &proctype);
+    if (proctype == ADM_NATIVE) {
+        printf ("[FLEX] Rank(%d/%d): Process native\n", my_rank, my_size);
+    } else {
+        printf ("[FLEX] Rank(%d/%d): Process spawned\n", my_rank, my_size);
+	    first_it_spawned = 1; // it avoids spawns in the non-native procs
+    }
+    
+    /* set max number of iterations */
+    ADM_RegisterSysAttributesInt ("ADM_GLOBAL_MAX_ITERATION", &num_loops); 
+    /* get actual iteration for new added processes*/
+    ADM_GetSysAttributesInt ("ADM_GLOBAL_ITERATION", &starting_it);
+    /* starting monitoring service */
+    ADM_MonitoringService (ADM_SERVICE_START);
 
     for (auto loop_it = starting_it;
          current_silhouette_score < score_threshold && loop_it < num_loops;
          loop_it++) {
-        // Rank and size may have changed due to malleability
-        MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
-        MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+       
+        std::cout << "Loop begin: rank( "<< my_rank << "/" << my_size << "): Iteration= " << (loop_it-1) << "\n";
+
+        ADM_RegisterSysAttributesInt ("ADM_GLOBAL_ITERATION", &loop_it);
+	    //Flexmpi - skip the first iteration and then update the iterator to -- 
+        if(loop_it == 0) continue;
+
+	    if(first_it_spawned == 1)
+            first_it_spawned = 0;
+        else {
+            //alloc_nodes = num_methods -1;
+            //Update: allocate as many as idle nodes, up to num_methods
+            alloc_nodes = get_slurm_idle_nodes();
+            alloc_nodes = (alloc_nodes > num_methods - 1) ? num_methods - 1 : alloc_nodes;
+            std::cout << "Rank( "<< my_rank << "/" << my_size << "): Iteration= " << (loop_it-1) << ", detected " << alloc_nodes << " idle nodes in SLURM\n";
+            if (alloc_nodes != 0 && get_slurm_idle_nodes() > 0) {
+                int allowed = ADM_Operation_lock(my_rank); // lock for 1 process apps
+                if (allowed != -1) { 
+                    int procs_hint = alloc_nodes;
+                    int excl_nodes_hint = 1;
+                    printf ("[FLEX] Rank(%d/%d): Iteration= %d, procs_hint=%d, excl_nodes_hint=%d\n", my_rank, my_size, (loop_it-1), procs_hint, excl_nodes_hint);
+                    int status;
+                    ADM_Malleability_sync_(&procs_hint, &excl_nodes_hint, &my_size, &my_rank, NULL, &status);
+                    if (status != ADM_ACTIVE) {
+                        goto end;
+                    }
+                    ADM_Operation_unlock(allowed, my_rank); 
+                } else
+                    alloc_nodes = 0;
+            }
+        }
+
+        //broadcast jobname and alloc_nodes for the HPC-QC example
+        MPI_Bcast(&alloc_nodes, 1, MPI_INT, 0, ADM_COMM_WORLD);
+        int length = jobname_expanded.size();
+        MPI_Bcast(&length, 1, MPI_INT, 0, ADM_COMM_WORLD);
+        if (my_rank != 0) jobname_expanded.resize(length);
+        MPI_Bcast(jobname_expanded.data(), length, MPI_CHAR, 0, ADM_COMM_WORLD);
+        
+        // Measure dynamic procs overhead
+        auto initalloctime = std::chrono::high_resolution_clock::now();
+        std::cout << "[FLEX] Rank( "<< my_rank << "/" << my_size << "): Iteration= " << (loop_it-1) << "\n";
+	    MPI_Barrier(ADM_COMM_WORLD);
+	    num_processes = my_size;
 
         if (!ready_for_quantum) {
             // Broadcast parsed input to other ranks
-            MPI_Bcast(&num_points, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            MPI_Bcast(&num_points, 1, MPI_INT, 0, ADM_COMM_WORLD);
 
             if (my_rank != 0) {
                 pts.resize(num_points);
             }
 
-            MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, MPI_COMM_WORLD);
+            MPI_Bcast(pts.data(), num_points, MPI_POINT, 0, ADM_COMM_WORLD);
 
             // The maximum number of methods to be run by each process
             auto num_methods_proc =
@@ -595,7 +723,7 @@ int main(int argc, char **argv) {
                                                0);
             int ncl = run_clustering_algorithms(my_rank, num_methods_proc, pts,
                                                 num_methods, methods, functions,
-                                                assigned_clusters, loop_it);
+                                                assigned_clusters, (loop_it-1));
 
             std::vector<int> all_res; // Aggregation of all clustering results
                                       // across all processes
@@ -610,7 +738,7 @@ int main(int argc, char **argv) {
             }
 
             MPI_Gather(&ncl, 1, MPI_INT, cluster_counts.data(), 1, MPI_INT, 0,
-                       MPI_COMM_WORLD);
+                       ADM_COMM_WORLD);
 
             int ncl_tot;
             // Each rank should adjust the indices assigned to its clusters,
@@ -626,7 +754,7 @@ int main(int argc, char **argv) {
 
             int indices_offset;
             MPI_Scatter(offsets.data(), 1, MPI_INT, &indices_offset, 1, MPI_INT,
-                        0, MPI_COMM_WORLD);
+                        0, ADM_COMM_WORLD);
 
             for (auto it = assigned_clusters.begin();
                  it != assigned_clusters.end(); it++) {
@@ -635,7 +763,7 @@ int main(int argc, char **argv) {
 
             MPI_Gather(assigned_clusters.data(), num_points * num_methods_proc,
                        MPI_INT, all_res.data(), num_points * num_methods_proc,
-                       MPI_INT, 0, MPI_COMM_WORLD);
+                       MPI_INT, 0, ADM_COMM_WORLD);
 
             if (my_rank == 0) {
                 // TODO remove this loop, only meant for debugging Silhouette
@@ -676,7 +804,7 @@ int main(int argc, char **argv) {
                 if (status == EXIT_FAILURE) {
                     std::cerr << "Unable to write the overlap matrix to file."
                               << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                    MPI_Abort(ADM_COMM_WORLD, EXIT_FAILURE);
                 }
 
                 auto clus_status =
@@ -685,12 +813,33 @@ int main(int argc, char **argv) {
                     std::cerr << "Unable to write the obtained "
                                  "clusters to file."
                               << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                    MPI_Abort(ADM_COMM_WORLD, EXIT_FAILURE);
                 }
             }
 
             ready_for_quantum = true;
-            // MALL remove unneeded resources
+            
+            int prev_alloc_nodes = alloc_nodes;
+
+            // Reduction only if the application has been expanded.
+            if(alloc_nodes > 0 && check_expanded_jobs(jobname_expanded.c_str())){
+                MPI_Barrier(ADM_COMM_WORLD);
+                int procs_hint = 0 - alloc_nodes; 
+                int excl_nodes_hint = 1;
+                printf ("[FLEX] Rank(%d/%d): Iteration= %d, procs_hint=%d, excl_nodes_hint=%d\n", my_rank, my_size, (loop_it-1), procs_hint, excl_nodes_hint);
+                int status;
+                ADM_Malleability_sync_(&procs_hint, &excl_nodes_hint, &my_size, &my_rank, NULL, &status);
+                alloc_nodes = 0;
+                if (status != ADM_ACTIVE) {
+                    goto end;
+                }
+            } 
+            // end dynamic allocation time
+            auto endalloctime = std::chrono::high_resolution_clock::now();
+            if (my_rank == 0) {
+                std::chrono::duration<double> hpctime =  endalloctime - initalloctime;
+                std::cout << "[FLEX] HPC Phase time (s): " << hpctime.count() << " with " << prev_alloc_nodes << " nodes \n";
+            }
         }
 
         if (my_rank == 0) {
@@ -752,7 +901,7 @@ int main(int argc, char **argv) {
             if (status == EXIT_FAILURE) {
                 std::cerr << "Something went wrong while reading files."
                           << std::endl;
-                MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                MPI_Abort(ADM_COMM_WORLD, EXIT_FAILURE);
             }
 
             // TODO remove outliers management if unnecessary
@@ -771,7 +920,7 @@ int main(int argc, char **argv) {
                 if (!best_silhouette_file) {
                     std::cerr << "Error opening best silhouette file."
                               << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                    MPI_Abort(ADM_COMM_WORLD, EXIT_FAILURE);
                 }
                 std::string line;
                 std::getline(best_silhouette_file, line);
@@ -787,10 +936,20 @@ int main(int argc, char **argv) {
             }
         }
         // All ranks need to know if a good enough solution has been found
-        MPI_Bcast(&current_silhouette_score, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&current_silhouette_score, 1, MPI_DOUBLE, 0, ADM_COMM_WORLD);
         ready_for_quantum = false;
-        // MALL request new resources if we need to execute another loop
-        // iteration
+    }
+
+end:
+    //Flexmpi - end monitor
+    ADM_MonitoringService (ADM_SERVICE_STOP);
+
+    std::cout << "Rank " << my_rank << " finalizing\n";
+    // End time
+    auto endtime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> walltime =  endtime - inittime;
+    if (my_rank == 0) {
+        std::cout << "Total execution time (s): " << walltime.count() << "\n";
     }
     MPI_Finalize();
     return 0;

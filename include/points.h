@@ -1,4 +1,15 @@
-#include <mpi.h>
+//#include <mpi.h>
+#define MPICH_SKIP_MPICXX 1  // si es MPICH
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+   #include <empi.h>
+#ifdef __cplusplus
+}
+#endif
+
+
 
 #ifndef POINT_H
 #define POINT_H
